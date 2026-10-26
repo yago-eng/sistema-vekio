@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Read(//usr/local/bin/**)",
+      "Bash(find / -maxdepth 4 -iname \"node\" -type f)",
+      "Bash(sw_vers -productVersion)",
+      "Bash(npx --yes create-next-app@latest . --ts --tailwind --eslint --app --src-dir=false --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(rm -rf /tmp/sistema-vekio-scaffold)",
+      "Bash(npx --yes create-next-app@latest /tmp/sistema-vekio-scaffold --ts --tailwind --eslint --app --src-dir=false --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npm install *)",
+      "Bash(npx --yes shadcn@latest init -d)",
+      "Bash(npx --yes shadcn@latest add button input label card table dialog select badge separator sonner)",
+      "Bash(rm -f app/page.tsx)",
+      "Bash(mkdir -p app/login app/obras \"app/obras/[id]\" \"\\(dashboard\\)\")",
+      "Bash(npm run *)"
+    ]
+  }
+}
