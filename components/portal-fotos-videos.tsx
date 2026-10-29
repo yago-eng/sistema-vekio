@@ -1,37 +1,13 @@
 import { Film, FileText, Download } from "lucide-react";
-import { agruparPorMesESemana } from "@/lib/agrupar-arquivos";
+import { AgrupadoPorMesSemanaDia } from "@/components/portal-agrupado";
 import type { Arquivo } from "@/lib/types";
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR");
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 export function isFotoOuVideo(a: Arquivo) {
   return a.mimeType.startsWith("image/") || a.mimeType.startsWith("video/");
-}
-
-function AgrupadoPorMesESemana({
-  itens,
-  children,
-}: {
-  itens: Arquivo[];
-  children: (itensDaSemana: Arquivo[]) => React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-6">
-      {agruparPorMesESemana(itens).map((mes) => (
-        <div key={mes.chave} className="flex flex-col gap-4">
-          <h4 className="text-sm font-bold">{mes.label}</h4>
-          {mes.semanas.map((semana) => (
-            <div key={semana.chave} className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground">{semana.label}</p>
-              {children(semana.itens)}
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function GradeFotos({ itens }: { itens: Arquivo[] }) {
@@ -77,19 +53,19 @@ export function PortalFotosVideos({ arquivos }: { arquivos: Arquivo[] }) {
       {fotos.length > 0 && (
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Fotos</h3>
-          <AgrupadoPorMesESemana itens={fotos}>
-            {(itensDaSemana) => <GradeFotos itens={itensDaSemana} />}
-          </AgrupadoPorMesESemana>
+          <AgrupadoPorMesSemanaDia itens={fotos}>
+            {(itensDoDia) => <GradeFotos itens={itensDoDia} />}
+          </AgrupadoPorMesSemanaDia>
         </div>
       )}
 
       {videos.length > 0 && (
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Vídeos</h3>
-          <AgrupadoPorMesESemana itens={videos}>
-            {(itensDaSemana) => (
+          <AgrupadoPorMesSemanaDia itens={videos}>
+            {(itensDoDia) => (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {itensDaSemana.map((a) => (
+                {itensDoDia.map((a) => (
                   <div key={a.id} className="flex flex-col gap-1">
                     <video controls className="w-full rounded-lg border bg-black">
                       <source src={`/api/files/${a.id}`} type={a.mimeType} />
@@ -103,17 +79,17 @@ export function PortalFotosVideos({ arquivos }: { arquivos: Arquivo[] }) {
                 ))}
               </div>
             )}
-          </AgrupadoPorMesESemana>
+          </AgrupadoPorMesSemanaDia>
         </div>
       )}
 
       {outrosRegistros.length > 0 && (
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Registros de obra</h3>
-          <AgrupadoPorMesESemana itens={outrosRegistros}>
-            {(itensDaSemana) => (
+          <AgrupadoPorMesSemanaDia itens={outrosRegistros}>
+            {(itensDoDia) => (
               <div className="flex flex-col gap-2">
-                {itensDaSemana.map((a) => (
+                {itensDoDia.map((a) => (
                   <a
                     key={a.id}
                     href={`/arquivo/${a.id}`}
@@ -131,7 +107,7 @@ export function PortalFotosVideos({ arquivos }: { arquivos: Arquivo[] }) {
                 ))}
               </div>
             )}
-          </AgrupadoPorMesESemana>
+          </AgrupadoPorMesSemanaDia>
         </div>
       )}
     </div>

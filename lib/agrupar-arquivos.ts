@@ -1,27 +1,43 @@
-// Agrupa arquivos por mês e, dentro do mês, por semana (segunda a domingo),
-// do mais recente para o mais antigo — pela data de envio.
+// Agrupa arquivos por mês e, dentro do mês, por semana (segunda a domingo) e
+// por dia, do mais recente para o mais antigo — pela data de envio.
+// As datas são sempre as de Brasília, rodando no servidor (UTC) ou no navegador.
 
 import type { Arquivo } from "./types";
 
+const FUSO = "America/Sao_Paulo";
+const formatadorSP = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FUSO,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+// Date cujos campos locais (ano/mês/dia) são os de Brasília naquele instante.
+function emSP(d: Date): Date {
+  const [y, m, dia] = formatadorSP.format(d).split("-").map(Number);
+  return new Date(y, m - 1, dia);
+}
+
 function startOfWeek(d: Date) {
-  const date = new Date(d);
+  const date = emSP(d);
   const day = date.getDay();
   const diff = (day === 0 ? -6 : 1) - day; // volta pra segunda-feira
   date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
   return date;
 }
 
 function monthKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const sp = emSP(d);
+  return `${sp.getFullYear()}-${String(sp.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function weekKey(d: Date) {
-  return startOfWeek(d).toISOString().slice(0, 10);
+  const seg = startOfWeek(d);
+  return `${seg.getFullYear()}-${String(seg.getMonth() + 1).padStart(2, "0")}-${String(seg.getDate()).padStart(2, "0")}`;
 }
 
 function formatMonthLabel(iso: string) {
-  const label = new Date(iso).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const label = emSP(new Date(iso)).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -38,13 +54,12 @@ export type GrupoSemana = { chave: string; label: string; itens: Arquivo[]; dias
 export type GrupoMes = { chave: string; label: string; semanas: GrupoSemana[] };
 
 function diaKey(d: Date) {
-  return `${monthKey(d)}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${monthKey(d)}-${String(emSP(d).getDate()).padStart(2, "0")}`;
 }
 
 function formatDiaLabel(iso: string) {
-  const d = new Date(iso);
-  const zero = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((zero(new Date()) - zero(d)) / 86_400_000);
+  const d = emSP(new Date(iso));
+  const diff = Math.round((emSP(new Date()).getTime() - d.getTime()) / 86_400_000);
   const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   if (diff === 0) return `Hoje · ${data}`;
   if (diff === 1) return `Ontem · ${data}`;

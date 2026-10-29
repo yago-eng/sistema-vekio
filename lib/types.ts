@@ -120,6 +120,7 @@ export type Etapa = {
 export const ARQUIVO_CATEGORIAS = [
   { id: "projeto", label: "Projeto (plantas, memorial)" },
   { id: "contrato", label: "Contrato" },
+  { id: "cronograma", label: "Cronograma (feito fora do sistema)" },
   { id: "foto", label: "Foto" },
   { id: "relatorio", label: "Relatório" },
   { id: "registro", label: "Registro de obra" },

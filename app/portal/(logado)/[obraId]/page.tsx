@@ -6,6 +6,7 @@ import { PortalRelatorioObra } from "@/components/portal-relatorio-obra";
 import { PortalFotosVideos, isFotoOuVideo } from "@/components/portal-fotos-videos";
 import { PortalArquivoLista } from "@/components/portal-arquivo-lista";
 import { GanttChart } from "@/components/gantt-chart";
+import { CronogramaArquivo } from "@/components/cronograma-arquivo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft } from "lucide-react";
@@ -41,8 +42,11 @@ export default async function PortalObraPage({
 
   // Notas fiscais/cupons são papel interno da empresa — nunca aparecem pro cliente.
   const visiveis = arquivos.filter((a) => a.categoria !== "nota_fiscal");
-  const fotosERegistros = visiveis.filter((a) => isFotoOuVideo(a) || a.categoria === "registro");
-  const documentos = visiveis.filter((a) => a.categoria !== "registro" && !isFotoOuVideo(a));
+  // O cronograma enviado aparece só na aba Cronograma (respeita as abas liberadas pro cliente).
+  const cronogramas = visiveis.filter((a) => a.categoria === "cronograma");
+  const demais = visiveis.filter((a) => a.categoria !== "cronograma");
+  const fotosERegistros = demais.filter((a) => isFotoOuVideo(a) || a.categoria === "registro");
+  const documentos = demais.filter((a) => a.categoria !== "registro" && !isFotoOuVideo(a));
 
   if (abasVisiveis.length === 0) {
     return (
@@ -91,8 +95,11 @@ export default async function PortalObraPage({
         {abasHabilitadas.has("cronograma") && (
           <TabsContent value="cronograma">
             <Card>
-              <CardContent className="pt-6">
-                <GanttChart obraId={obra.id} etapas={etapas} readOnly />
+              <CardContent className="flex flex-col gap-6 pt-6">
+                {cronogramas.length > 0 && <CronogramaArquivo arquivos={cronogramas} />}
+                {(etapas.length > 0 || cronogramas.length === 0) && (
+                  <GanttChart obraId={obra.id} etapas={etapas} readOnly />
+                )}
               </CardContent>
             </Card>
           </TabsContent>

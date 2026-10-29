@@ -30,6 +30,7 @@ import { ArquivoUploadForm } from "@/components/arquivo-upload-form";
 import { ArquivoList } from "@/components/arquivo-list";
 import { EtapaFormDialog } from "@/components/etapa-form-dialog";
 import { GanttChart } from "@/components/gantt-chart";
+import { CronogramaArquivo } from "@/components/cronograma-arquivo";
 import { OrcamentoUploadForm } from "@/components/orcamento-upload-form";
 import { OrcamentoItemFormDialog } from "@/components/orcamento-item-form-dialog";
 import { OrcamentoTable } from "@/components/orcamento-table";
@@ -111,6 +112,7 @@ export default async function ObraDetailPage({
     ]);
 
   const custoDaObra = orcamentoItens.reduce((s, i) => s + i.valorTotal, 0);
+  const cronogramas = arquivos.filter((a) => a.categoria === "cronograma");
 
   // ?aba= vem dos links das notificações; abas só de admin caem no Financeiro.
   const abasLivres = ["financeiro", "documentos", "cronograma", "relatorio-obra", "cliente"];
@@ -321,7 +323,19 @@ export default async function ObraDetailPage({
               <EtapaFormDialog obraId={obra.id} />
             </div>
           </div>
-          <GanttChart obraId={obra.id} etapas={etapas} />
+          {cronogramas.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Cronograma enviado</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CronogramaArquivo arquivos={cronogramas} />
+              </CardContent>
+            </Card>
+          )}
+          {(etapas.length > 0 || cronogramas.length === 0) && (
+            <GanttChart obraId={obra.id} etapas={etapas} />
+          )}
         </TabsContent>
 
         {isAdmin && (

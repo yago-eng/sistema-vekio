@@ -593,7 +593,8 @@ export async function registrarArquivoAction(input: {
       error: e instanceof Error ? e.message : "Não foi possível registrar o arquivo enviado.",
     };
   }
-  if (input.visivelCliente) await updateArquivoVisibilidade(arquivo.id, true);
+  // O cronograma enviado é feito pra ser visto na aba Cronograma da Área do Cliente.
+  if (input.visivelCliente || categoria === "cronograma") await updateArquivoVisibilidade(arquivo.id, true);
 
   if (refinarComIA) {
     const novoId = arquivo.id;

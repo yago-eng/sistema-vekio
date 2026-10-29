@@ -47,6 +47,7 @@ const ABAS: { id: AbaArquivos; label: string; icone: typeof ImageIcon }[] = [
 
 function abaDe(a: Arquivo): AbaArquivos {
   if (a.categoria === "nota_fiscal") return "nota";
+  if (a.categoria === "cronograma") return "documento";
   if (a.mimeType.startsWith("image/")) return "foto";
   if (a.mimeType.startsWith("video/")) return "video";
   return "documento";
@@ -57,6 +58,7 @@ const ORDEM_SECOES: ArquivoCategoria[] = [
   "registro",
   "projeto",
   "contrato",
+  "cronograma",
   "relatorio",
   "documento",
 ];
@@ -67,6 +69,7 @@ const TITULO_SECAO: Record<ArquivoCategoria, string> = {
   registro: "Registros de obra",
   projeto: "Projetos e plantas",
   contrato: "Contratos",
+  cronograma: "Cronogramas",
   relatorio: "Relatórios",
   documento: "Documentos",
 };

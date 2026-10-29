@@ -64,7 +64,8 @@ export function ArquivoUploadForm({ obraId }: { obraId: string }) {
         // Fotos da galeria (principalmente iPhone) podem vir muito grandes
         // (HEIC de alta resolução) e travar o envio em conexão fraca de
         // obra sem nenhum erro visível — reduz antes de enviar.
-        file = await comprimirImagemSeNecessario(file);
+        // Cronograma em imagem fica como veio — comprimir deixaria o texto ilegível.
+        if (categoria !== "cronograma") file = await comprimirImagemSeNecessario(file);
 
         const assinado = await comLimite(criarUploadAssinadoAction(obraId, file.name));
         if (!assinado.ok) throw new Error(assinado.error);
@@ -156,6 +157,13 @@ export function ArquivoUploadForm({ obraId }: { obraId: string }) {
           Visível para o cliente na Área do Cliente
         </Label>
       </div>
+      {categoria === "cronograma" && (
+        <p className="text-xs text-muted-foreground">
+          O cronograma aparece na aba Cronograma da obra e também para o cliente, mesmo sem marcar a
+          opção acima. Um novo envio passa a ser o cronograma exibido; os anteriores ficam como versões
+          antigas.
+        </p>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={enviando} className="gap-2">
         {enviando ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
