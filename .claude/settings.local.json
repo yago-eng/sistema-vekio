@@ -13,7 +13,16 @@
       "Bash(npx --yes shadcn@latest add button input label card table dialog select badge separator sonner)",
       "Bash(rm -f app/page.tsx)",
       "Bash(mkdir -p app/login app/obras \"app/obras/[id]\" \"\\(dashboard\\)\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push origin main)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)"
     ]
   }
 }
