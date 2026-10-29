@@ -33,8 +33,36 @@ function formatWeekLabel(weekStartIso: string) {
   return `Semana de ${fmt(start)} a ${fmt(end)}`;
 }
 
-export type GrupoSemana = { chave: string; label: string; itens: Arquivo[] };
+export type GrupoDia = { chave: string; label: string; itens: Arquivo[] };
+export type GrupoSemana = { chave: string; label: string; itens: Arquivo[]; dias: GrupoDia[] };
 export type GrupoMes = { chave: string; label: string; semanas: GrupoSemana[] };
+
+function diaKey(d: Date) {
+  return `${monthKey(d)}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDiaLabel(iso: string) {
+  const d = new Date(iso);
+  const zero = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((zero(new Date()) - zero(d)) / 86_400_000);
+  const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  if (diff === 0) return `Hoje · ${data}`;
+  if (diff === 1) return `Ontem · ${data}`;
+  const dia = d.toLocaleDateString("pt-BR", { weekday: "long" });
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} · ${data}`;
+}
+
+function agruparPorDia(itens: Arquivo[]): GrupoDia[] {
+  const porDia = new Map<string, Arquivo[]>();
+  for (const a of itens) {
+    const dk = diaKey(new Date(a.createdAt));
+    if (!porDia.has(dk)) porDia.set(dk, []);
+    porDia.get(dk)!.push(a);
+  }
+  return Array.from(porDia.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([chave, doDia]) => ({ chave, label: formatDiaLabel(doDia[0].createdAt), itens: doDia }));
+}
 
 export function agruparPorMesESemana(itens: Arquivo[]): GrupoMes[] {
   const porMes = new Map<string, Arquivo[]>();
@@ -61,7 +89,8 @@ export function agruparPorMesESemana(itens: Arquivo[]): GrupoMes[] {
           itens: arquivosDaSemana.sort(
             (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
           ),
-        }));
+        }))
+        .map((sem) => ({ ...sem, dias: agruparPorDia(sem.itens) }));
       return { chave: mesChave, label: formatMonthLabel(arquivosDoMes[0].createdAt), semanas };
     });
 }

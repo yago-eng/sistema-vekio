@@ -38,6 +38,7 @@ async function classificarPdfComIA(buffer: Buffer, nome: string): Promise<Arquiv
   try {
     const res = await fetch(ANTHROPIC_ENDPOINT, {
       method: "POST",
+      signal: AbortSignal.timeout(20_000),
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",

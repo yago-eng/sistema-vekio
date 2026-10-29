@@ -149,6 +149,7 @@ export function ArquivoList({
   const [organizando, setOrganizando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [abaEscolhida, setAbaEscolhida] = useState<AbaArquivos | null>(null);
+  const [catEscolhida, setCatEscolhida] = useState<ArquivoCategoria | null>(null);
 
   async function organizar() {
     setOrganizando(true);
@@ -215,6 +216,7 @@ export function ArquivoList({
               </a>
               <span className="truncate text-[11px] text-muted-foreground">
                 {formatSize(arquivo.tamanhoBytes)}
+                {abaDe(arquivo) === "documento" ? ` · ${TITULO_SECAO[arquivo.categoria]}` : ""}
                 {arquivo.legenda ? ` · ${arquivo.legenda}` : ""}
               </span>
             </div>
@@ -277,14 +279,14 @@ export function ArquivoList({
     );
   }
 
-  const daAba = arquivos.filter((a) => abaDe(a) === aba);
-  const secoes =
+  const daAbaTodos = arquivos.filter((a) => abaDe(a) === aba);
+  // Em Documentos dá pra filtrar por tipo (projetos, contratos, relatórios...).
+  const categoriasDaAba =
     aba === "documento"
-      ? ORDEM_SECOES.map((cat) => ({
-          cat,
-          itens: daAba.filter((a) => a.categoria === cat),
-        })).filter((s) => s.itens.length > 0)
-      : [{ cat: null, itens: daAba }];
+      ? ORDEM_SECOES.filter((cat) => daAbaTodos.some((a) => a.categoria === cat))
+      : [];
+  const cat = catEscolhida && categoriasDaAba.includes(catEscolhida) ? catEscolhida : null;
+  const daAba = cat ? daAbaTodos.filter((a) => a.categoria === cat) : daAbaTodos;
 
   return (
     <div className="flex flex-col gap-5">
@@ -338,36 +340,47 @@ export function ArquivoList({
         ))}
       </div>
 
-      {aba !== "documento" &&
-        agruparPorMesESemana(daAba).map((mes) => (
-          <section key={mes.chave} className="flex flex-col gap-4">
-            <h3 className="text-sm font-bold">{mes.label}</h3>
-            {mes.semanas.map((semana) => (
-              <div key={semana.chave} className="flex flex-col gap-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {semana.label} · {semana.itens.length}
-                </p>
-                {renderGrade(semana.itens)}
-              </div>
-            ))}
-          </section>
-        ))}
+      {categoriasDaAba.length > 1 && (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[null, ...categoriasDaAba].map((c) => (
+            <button
+              key={c ?? "todos"}
+              type="button"
+              onClick={() => setCatEscolhida(c)}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                cat === c
+                  ? "border-foreground bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {c ? TITULO_SECAO[c] : "Todos"}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {aba === "documento" &&
-        secoes.map(({ cat, itens }) => (
-          <section key={cat ?? aba} className="flex flex-col gap-2">
-            {cat && (
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                {TITULO_SECAO[cat] ??
-                  ARQUIVO_CATEGORIAS.find((c) => c.id === cat)?.label}
-                <span className="rounded-full bg-muted px-2 text-xs font-normal text-muted-foreground">
-                  {itens.length}
-                </span>
-              </h3>
-            )}
-            {renderGrade(itens)}
-          </section>
-        ))}
+      {agruparPorMesESemana(daAba).map((mes) => (
+        <section key={mes.chave} className="flex flex-col gap-4">
+          <h3 className="text-sm font-bold">{mes.label}</h3>
+          {mes.semanas.map((semana) => (
+            <div key={semana.chave} className="flex flex-col gap-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                {semana.label} · {semana.itens.length}
+              </p>
+              {semana.dias.map((dia) => (
+                <div key={dia.chave} className="flex flex-col gap-2">
+                  <p className="border-b pb-1 text-xs font-semibold">
+                    {dia.label}
+                    <span className="ml-1.5 font-normal text-muted-foreground">{dia.itens.length}</span>
+                  </p>
+                  {renderGrade(dia.itens)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </section>
+      ))}
     </div>
   );
 }

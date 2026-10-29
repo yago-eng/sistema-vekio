@@ -19,6 +19,16 @@ import {
 import { Upload, Loader2 } from "lucide-react";
 import { ARQUIVO_CATEGORIAS } from "@/lib/types";
 
+// Nenhuma etapa do envio pode ficar "carregando" pra sempre.
+function comLimite<T>(promessa: Promise<T>, ms = 60_000): Promise<T> {
+  return Promise.race([
+    promessa,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("O servidor demorou a responder. Tente enviar novamente.")), ms)
+    ),
+  ]);
+}
+
 export function ArquivoUploadForm({ obraId }: { obraId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -56,12 +66,12 @@ export function ArquivoUploadForm({ obraId }: { obraId: string }) {
         // obra sem nenhum erro visível — reduz antes de enviar.
         file = await comprimirImagemSeNecessario(file);
 
-        const assinado = await criarUploadAssinadoAction(obraId, file.name);
+        const assinado = await comLimite(criarUploadAssinadoAction(obraId, file.name));
         if (!assinado.ok) throw new Error(assinado.error);
 
         await enviarArquivoDireto(assinado.path, assinado.token, file);
 
-        const reg = await registrarArquivoAction({
+        const reg = await comLimite(registrarArquivoAction({
           obraId,
           caminhoArmazenado: assinado.path,
           nomeOriginal: file.name,
@@ -70,7 +80,7 @@ export function ArquivoUploadForm({ obraId }: { obraId: string }) {
           categoria,
           visivelCliente,
           legenda,
-        });
+        }));
         if (reg.error) throw new Error(reg.error);
       }
       formRef.current?.reset();

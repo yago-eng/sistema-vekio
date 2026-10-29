@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createSession, destroySession, getCurrentUser } from "./auth";
 import { createClient } from "./supabase/server";
@@ -564,15 +565,16 @@ export async function registrarArquivoAction(input: {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // "auto" (padrão do formulário): a IA/regras escolhem a categoria pelo tipo
-  // e conteúdo do arquivo. Qualquer categoria escolhida à mão é respeitada.
-  const categoria = ARQUIVO_CATEGORIAS.some((c) => c.id === input.categoria)
+  // "auto" (padrão do formulário): categoria pelo tipo/nome do arquivo, na hora.
+  // PDFs ambíguos entram como "documento" e a IA refina DEPOIS da resposta
+  // (after), pra nunca segurar o envio enquanto lê o PDF.
+  // Qualquer categoria escolhida à mão é respeitada.
+  const manual = ARQUIVO_CATEGORIAS.some((c) => c.id === input.categoria);
+  const rapida = manual ? null : classificarPorNome(input.nomeOriginal, input.mimeType);
+  const categoria: ArquivoCategoria = manual
     ? (input.categoria as ArquivoCategoria)
-    : await classificarArquivo({
-        nome: input.nomeOriginal,
-        mimeType: input.mimeType,
-        lerBytes: () => baixarBytesArquivo(input.caminhoArmazenado),
-      });
+    : (rapida ?? "documento");
+  const refinarComIA = !manual && !rapida && input.mimeType === "application/pdf";
 
   let arquivo;
   try {
@@ -592,6 +594,22 @@ export async function registrarArquivoAction(input: {
     };
   }
   if (input.visivelCliente) await updateArquivoVisibilidade(arquivo.id, true);
+
+  if (refinarComIA) {
+    const novoId = arquivo.id;
+    after(async () => {
+      try {
+        const ia = await classificarArquivo({
+          nome: input.nomeOriginal,
+          mimeType: input.mimeType,
+          lerBytes: () => baixarBytesArquivo(input.caminhoArmazenado),
+        });
+        if (ia !== "documento") await updateArquivoCategoria(novoId, ia);
+      } catch {
+        // fica como "documento"
+      }
+    });
+  }
 
   const obraDoArquivo = await getObra(input.obraId);
   await registrarArquivoEnviado({
