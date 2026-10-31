@@ -17,7 +17,8 @@ export type NotificacaoTipo =
   | "documentos"
   | "parcela_vence"
   | "conta_pagar"
-  | "data_importante";
+  | "data_importante"
+  | "tarefa";
 
 export type NotificacaoItem = {
   id: string;
@@ -319,3 +320,73 @@ export const FORNECEDORES_SUGERIDOS = [
   "Alan Caçamba Entulho",
   "Baron Revestimentos",
 ] as const;
+
+
+export const TAREFA_STATUS = [
+  { id: "a_fazer", label: "A fazer" },
+  { id: "fazendo", label: "Fazendo" },
+  { id: "concluida", label: "Concluída" },
+] as const;
+export type TarefaStatus = (typeof TAREFA_STATUS)[number]["id"];
+
+export const TAREFA_PRIORIDADES = [
+  { id: "urgente", label: "Urgente" },
+  { id: "alta", label: "Alta" },
+  { id: "normal", label: "Normal" },
+  { id: "baixa", label: "Baixa" },
+] as const;
+export type TarefaPrioridade = (typeof TAREFA_PRIORIDADES)[number]["id"];
+
+export const TAREFA_RECORRENCIAS = [
+  { id: "nenhuma", label: "Não repete" },
+  { id: "diaria", label: "Todo dia" },
+  { id: "semanal", label: "Toda semana" },
+  { id: "quinzenal", label: "A cada 15 dias" },
+  { id: "mensal", label: "Todo mês" },
+] as const;
+export type TarefaRecorrencia = (typeof TAREFA_RECORRENCIAS)[number]["id"];
+
+export type Tarefa = {
+  id: string;
+  obraId: string | null;
+  obraNome: string | null;
+  titulo: string;
+  descricao: string;
+  status: TarefaStatus;
+  prioridade: TarefaPrioridade;
+  responsavelId: string | null;
+  responsavelNome: string | null;
+  prazo: string | null; // YYYY-MM-DD
+  recorrencia: TarefaRecorrencia;
+  criadoPor: string | null;
+  concluidaEm: string | null;
+  createdAt: string;
+  checklistTotal: number;
+  checklistFeitos: number;
+  comentarios: number;
+  anexos: number;
+};
+
+export type TarefaChecklistItem = { id: string; texto: string; feito: boolean };
+export type TarefaComentario = {
+  id: string;
+  autorId: string | null;
+  autorNome: string;
+  texto: string;
+  createdAt: string;
+};
+export type TarefaAnexo = {
+  id: string;
+  nomeOriginal: string;
+  tamanhoBytes: number;
+  mimeType: string;
+  createdAt: string;
+};
+export type TarefaDetalhe = {
+  tarefa: Tarefa;
+  checklist: TarefaChecklistItem[];
+  comentarios: TarefaComentario[];
+  anexos: TarefaAnexo[];
+};
+
+export type MembroEquipe = { id: string; nome: string };

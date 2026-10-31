@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/actions";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Building2, LineChart, LogOut, ClipboardList, StickyNote, Receipt, CalendarClock, CalendarHeart, Users, Menu, X, Home } from "lucide-react";
+import { Building2, CheckSquare, LineChart, LogOut, ClipboardList, StickyNote, Receipt, CalendarClock, CalendarHeart, Users, Menu, X, Home } from "lucide-react";
 
 const inicioItem = { href: "/inicio", label: "Início", icon: Home, active: true };
+const tarefasItem = { href: "/tarefas", label: "Tarefas", icon: CheckSquare, active: true };
 const obrasItem = { href: "/obras", label: "Obras & Financeiro", icon: Building2, active: true };
 const lancarGastoItem = { href: "/lancar-gasto", label: "Lançar gasto", icon: Receipt, active: true };
 const adminItems = [
@@ -67,11 +68,20 @@ function NavLinks({ items, pathname, onNavigate }: { items: NavItem[]; pathname:
   );
 }
 
-export function NavSidebar({ userName, isAdmin }: { userName: string; isAdmin: boolean }) {
+export function NavSidebar({
+  userName,
+  isAdmin,
+  mostrarTarefas,
+}: {
+  userName: string;
+  isAdmin: boolean;
+  mostrarTarefas: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const items = [
     inicioItem,
+    ...(mostrarTarefas ? [tarefasItem] : []),
     lancarGastoItem,
     obrasItem,
     ...(isAdmin ? adminItems : []),

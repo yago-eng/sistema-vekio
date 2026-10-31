@@ -1,5 +1,6 @@
 import { createClient } from "./supabase/server";
-import { enviarPushParaEquipe } from "./push";
+import { enviarPushParaEquipe, enviarPushParaUsuario } from "./push";
+import { podeUsarTarefas } from "./recursos";
 import type { NotificacaoItem, NotificacaoTipo, User } from "./types";
 
 const FUSO = "America/Sao_Paulo";
@@ -50,6 +51,8 @@ export async function registrarNotificacao(n: {
   link?: string | null;
   atorId: string;
   atorNome: string;
+  // Quando informado, só essa pessoa vê o aviso (e recebe o push).
+  destinatarioId?: string | null;
 }): Promise<void> {
   try {
     const supabase = await createClient();
@@ -62,8 +65,11 @@ export async function registrarNotificacao(n: {
       link: n.link ?? null,
       ator_id: n.atorId,
       ator_nome: n.atorNome,
+      destinatario_id: n.destinatarioId ?? null,
     });
-    await enviarPushParaEquipe({ titulo: n.titulo, descricao: n.descricao, link: n.link ?? null }, n.atorId);
+    const payload = { titulo: n.titulo, descricao: n.descricao, link: n.link ?? null };
+    if (n.destinatarioId) await enviarPushParaUsuario(n.destinatarioId, payload);
+    else await enviarPushParaEquipe(payload, n.atorId);
   } catch {
     // ignora
   }
@@ -254,6 +260,37 @@ export async function listarNotificacoes(
     }
   }
 
+  // Tarefas da própria pessoa que vencem hoje ou estão atrasadas.
+  const { data: minhasTarefas } = podeUsarTarefas(user)
+    ? await supabase
+        .from("tarefas")
+        .select("id, titulo, prazo, obra_id, obras(nome)")
+        .eq("responsavel_id", user.id)
+        .neq("status", "concluida")
+        .lte("prazo", hoje)
+    : { data: [] };
+  for (const t of (minhasTarefas ?? []) as unknown as {
+    id: string;
+    titulo: string;
+    prazo: string;
+    obras: { nome: string } | null;
+  }[]) {
+    const atrasada = t.prazo < hoje;
+    avisos.push({
+      id: `calc:tarefa:${t.id}:${atrasada ? "atrasada" : hoje}`,
+      tipo: "tarefa",
+      titulo: atrasada ? `Tarefa atrasada: ${t.titulo}` : `Hoje vence a tarefa: ${t.titulo}`,
+      descricao: atrasada
+        ? `Prazo era ${t.prazo.split("-").reverse().join("/")}${t.obras ? ` · ${t.obras.nome}` : ""}`
+        : (t.obras?.nome ?? "Tarefa da empresa"),
+      obraNome: t.obras?.nome ?? null,
+      link: "/tarefas",
+      quando: inicioHoje,
+      lida: false,
+      propria: false,
+    });
+  }
+
   // Datas importantes (aniversários etc.) — a tabela só é legível por admin.
   const { data: datas } = await supabase
     .from("datas_importantes")
@@ -282,6 +319,7 @@ export async function listarNotificacoes(
   const { data: eventos } = await supabase
     .from("notificacoes")
     .select("id, tipo, titulo, descricao, obra_nome, link, ator_id, ator_nome, atualizada_em")
+    .or(`destinatario_id.is.null,destinatario_id.eq.${user.id}`)
     .gte("atualizada_em", desde)
     .order("atualizada_em", { ascending: false })
     .limit(80);

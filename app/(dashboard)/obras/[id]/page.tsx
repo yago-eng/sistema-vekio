@@ -8,6 +8,8 @@ import {
   getOrcamentoParametros,
   listArquivos,
   listCategorias,
+  listMembrosEquipe,
+  listTarefas,
   listEtapas,
   listLancamentos,
   getOrcamentoEscopo,
@@ -31,6 +33,8 @@ import { ArquivoList } from "@/components/arquivo-list";
 import { EtapaFormDialog } from "@/components/etapa-form-dialog";
 import { GanttChart } from "@/components/gantt-chart";
 import { CronogramaArquivo } from "@/components/cronograma-arquivo";
+import { TarefasPainel } from "@/components/tarefas-painel";
+import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
 import { OrcamentoUploadForm } from "@/components/orcamento-upload-form";
 import { OrcamentoItemFormDialog } from "@/components/orcamento-item-form-dialog";
 import { OrcamentoTable } from "@/components/orcamento-table";
@@ -83,6 +87,7 @@ export default async function ObraDetailPage({
 
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.role === "admin";
+  const mostrarTarefas = podeUsarTarefas(currentUser);
   if (currentUser) await registrarAcessoObra(currentUser.id, id);
 
   let orcamentos: Awaited<ReturnType<typeof listOrcamentos>> = [];
@@ -95,7 +100,7 @@ export default async function ObraDetailPage({
   const orcamentoId =
     orcamento && orcamentos.some((o) => o.id === orcamento) ? orcamento : orcamentos[0]?.id;
 
-  const [totais, lancamentos, categorias, arquivos, etapas, aditivos, pagamentos, orcamentoItens, orcamentoParametros, clientes, escopo, relatoriosObra] =
+  const [totais, lancamentos, categorias, arquivos, etapas, aditivos, pagamentos, orcamentoItens, orcamentoParametros, clientes, escopo, relatoriosObra, tarefasObra, membrosEquipe] =
     await Promise.all([
       getObraTotais(id),
       listLancamentos(id),
@@ -109,13 +114,22 @@ export default async function ObraDetailPage({
       listClientesDaObra(id),
       isAdmin && orcamentoId ? getOrcamentoEscopo(orcamentoId) : Promise.resolve(undefined),
       listRelatoriosObra(id),
+      mostrarTarefas ? listTarefas({ obraId: id }) : Promise.resolve([]),
+      mostrarTarefas ? listMembrosEquipe() : Promise.resolve([]),
     ]);
 
   const custoDaObra = orcamentoItens.reduce((s, i) => s + i.valorTotal, 0);
   const cronogramas = arquivos.filter((a) => a.categoria === "cronograma");
 
   // ?aba= vem dos links das notificações; abas só de admin caem no Financeiro.
-  const abasLivres = ["financeiro", "documentos", "cronograma", "relatorio-obra", "cliente"];
+  const abasLivres = [
+    "financeiro",
+    "documentos",
+    "cronograma",
+    ...(mostrarTarefas ? ["tarefas"] : []),
+    "relatorio-obra",
+    "cliente",
+  ];
   const abasAdmin = ["pagamentos", "orcamento"];
   const abaInicial =
     aba && (abasLivres.includes(aba) || (isAdmin && abasAdmin.includes(aba))) ? aba : "financeiro";
@@ -183,6 +197,7 @@ export default async function ObraDetailPage({
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
+          {mostrarTarefas && <TabsTrigger value="tarefas">Tarefas</TabsTrigger>}
           {isAdmin && <TabsTrigger value="pagamentos">Pagamentos Recebidos</TabsTrigger>}
           <TabsTrigger value="relatorio-obra">Relatório de Obra</TabsTrigger>
           {isAdmin && <TabsTrigger value="orcamento">Orçamento</TabsTrigger>}
@@ -337,6 +352,19 @@ export default async function ObraDetailPage({
             <GanttChart obraId={obra.id} etapas={etapas} />
           )}
         </TabsContent>
+
+        {mostrarTarefas && currentUser && (
+          <TabsContent value="tarefas" className="flex flex-col gap-4">
+            <TarefasPainel
+              tarefas={tarefasObra}
+              membros={limitarResponsaveis(membrosEquipe, currentUser)}
+              obras={[]}
+              usuarioId={currentUser.id}
+              isAdmin={isAdmin}
+              obraFixaId={obra.id}
+            />
+          </TabsContent>
+        )}
 
         {isAdmin && (
         <TabsContent value="pagamentos" className="flex flex-col gap-6">

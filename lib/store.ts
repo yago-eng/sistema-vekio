@@ -23,6 +23,15 @@ import type {
   OrcamentoTipo,
   PipelineStatus,
   Regiao,
+  MembroEquipe,
+  Tarefa,
+  TarefaAnexo,
+  TarefaChecklistItem,
+  TarefaComentario,
+  TarefaDetalhe,
+  TarefaPrioridade,
+  TarefaRecorrencia,
+  TarefaStatus,
 } from "./types";
 
 /**
@@ -1704,4 +1713,254 @@ export async function createDataImportante(input: {
 export async function deleteDataImportante(id: string): Promise<void> {
   const supabase = await createClient();
   await supabase.from("datas_importantes").delete().eq("id", id);
+}
+
+
+// --- Tarefas ---
+
+const TAREFA_SELECT =
+  "*, obras(nome), responsavel:profiles!responsavel_id(nome), tarefa_checklist(feito), tarefa_comentarios(id), tarefa_anexos(id)";
+
+function mapTarefa(row: Record<string, unknown>): Tarefa {
+  const checklist = (row.tarefa_checklist as { feito: boolean }[] | null) ?? [];
+  return {
+    id: row.id as string,
+    obraId: (row.obra_id as string | null) ?? null,
+    obraNome: (row.obras as { nome: string } | null)?.nome ?? null,
+    titulo: row.titulo as string,
+    descricao: (row.descricao as string) ?? "",
+    status: row.status as TarefaStatus,
+    prioridade: row.prioridade as TarefaPrioridade,
+    responsavelId: (row.responsavel_id as string | null) ?? null,
+    responsavelNome: (row.responsavel as { nome: string } | null)?.nome ?? null,
+    prazo: (row.prazo as string | null) ?? null,
+    recorrencia: row.recorrencia as TarefaRecorrencia,
+    criadoPor: (row.criado_por as string | null) ?? null,
+    concluidaEm: (row.concluida_em as string | null) ?? null,
+    createdAt: row.created_at as string,
+    checklistTotal: checklist.length,
+    checklistFeitos: checklist.filter((c) => c.feito).length,
+    comentarios: ((row.tarefa_comentarios as unknown[] | null) ?? []).length,
+    anexos: ((row.tarefa_anexos as unknown[] | null) ?? []).length,
+  };
+}
+
+export async function listTarefas(filtro?: { obraId?: string }): Promise<Tarefa[]> {
+  const supabase = await createClient();
+  let query = supabase.from("tarefas").select(TAREFA_SELECT).order("created_at", { ascending: false });
+  if (filtro?.obraId) query = query.eq("obra_id", filtro.obraId);
+  const { data } = await query;
+  return (data ?? []).map(mapTarefa);
+}
+
+export async function getTarefa(id: string): Promise<Tarefa | undefined> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("tarefas").select(TAREFA_SELECT).eq("id", id).maybeSingle();
+  return data ? mapTarefa(data) : undefined;
+}
+
+export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | undefined> {
+  const tarefa = await getTarefa(id);
+  if (!tarefa) return undefined;
+  const supabase = await createClient();
+  const [checklist, comentarios, anexos] = await Promise.all([
+    supabase.from("tarefa_checklist").select("id, texto, feito").eq("tarefa_id", id).order("ordem").order("created_at"),
+    supabase
+      .from("tarefa_comentarios")
+      .select("id, autor_id, texto, created_at, profiles(nome)")
+      .eq("tarefa_id", id)
+      .order("created_at"),
+    supabase
+      .from("tarefa_anexos")
+      .select("id, nome_original, tamanho_bytes, mime_type, created_at")
+      .eq("tarefa_id", id)
+      .order("created_at"),
+  ]);
+  return {
+    tarefa,
+    checklist: (checklist.data ?? []).map(
+      (c): TarefaChecklistItem => ({ id: c.id as string, texto: c.texto as string, feito: c.feito as boolean })
+    ),
+    comentarios: (comentarios.data ?? []).map(
+      (c): TarefaComentario => ({
+        id: c.id as string,
+        autorId: (c.autor_id as string | null) ?? null,
+        autorNome: (c.profiles as unknown as { nome: string } | null)?.nome ?? "Alguém",
+        texto: c.texto as string,
+        createdAt: c.created_at as string,
+      })
+    ),
+    anexos: (anexos.data ?? []).map(
+      (a): TarefaAnexo => ({
+        id: a.id as string,
+        nomeOriginal: a.nome_original as string,
+        tamanhoBytes: Number(a.tamanho_bytes),
+        mimeType: a.mime_type as string,
+        createdAt: a.created_at as string,
+      })
+    ),
+  };
+}
+
+export async function listMembrosEquipe(): Promise<MembroEquipe[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, nome")
+    .in("role", ["admin", "equipe"])
+    .order("nome");
+  return (data ?? []).map((p) => ({ id: p.id as string, nome: (p.nome as string) || "Sem nome" }));
+}
+
+export type TarefaCampos = {
+  obraId: string | null;
+  titulo: string;
+  descricao: string;
+  prioridade: TarefaPrioridade;
+  responsavelId: string | null;
+  prazo: string | null;
+  recorrencia: TarefaRecorrencia;
+};
+
+export async function createTarefa(input: TarefaCampos & { criadoPor: string }): Promise<string> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tarefas")
+    .insert({
+      obra_id: input.obraId,
+      titulo: input.titulo,
+      descricao: input.descricao,
+      prioridade: input.prioridade,
+      responsavel_id: input.responsavelId,
+      prazo: input.prazo,
+      recorrencia: input.recorrencia,
+      criado_por: input.criadoPor,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Erro ao criar tarefa");
+  return data.id as string;
+}
+
+export async function updateTarefa(id: string, campos: TarefaCampos): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefas")
+    .update({
+      obra_id: campos.obraId,
+      titulo: campos.titulo,
+      descricao: campos.descricao,
+      prioridade: campos.prioridade,
+      responsavel_id: campos.responsavelId,
+      prazo: campos.prazo,
+      recorrencia: campos.recorrencia,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateTarefaStatus(id: string, status: TarefaStatus): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefas")
+    .update({
+      status,
+      concluida_em: status === "concluida" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTarefa(id: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data: anexos } = await supabase.from("tarefa_anexos").select("caminho_armazenado").eq("tarefa_id", id);
+  await supabase.from("tarefas").delete().eq("id", id);
+  return (anexos ?? []).map((a) => a.caminho_armazenado as string);
+}
+
+export async function addChecklistItem(tarefaId: string, texto: string, ordem: number): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("tarefa_checklist").insert({ tarefa_id: tarefaId, texto, ordem });
+  if (error) throw new Error(error.message);
+}
+
+export async function copiarChecklist(deTarefaId: string, paraTarefaId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tarefa_checklist")
+    .select("texto, ordem")
+    .eq("tarefa_id", deTarefaId)
+    .order("ordem");
+  if (!data || data.length === 0) return;
+  await supabase
+    .from("tarefa_checklist")
+    .insert(data.map((c) => ({ tarefa_id: paraTarefaId, texto: c.texto, ordem: c.ordem })));
+}
+
+export async function setChecklistItemFeito(id: string, feito: boolean): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("tarefa_checklist").update({ feito }).eq("id", id);
+}
+
+export async function deleteChecklistItem(id: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("tarefa_checklist").delete().eq("id", id);
+}
+
+export async function addTarefaComentario(tarefaId: string, autorId: string, texto: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefa_comentarios")
+    .insert({ tarefa_id: tarefaId, autor_id: autorId, texto });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTarefaComentario(id: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("tarefa_comentarios").delete().eq("id", id);
+}
+
+export async function createTarefaAnexo(input: {
+  tarefaId: string;
+  nomeOriginal: string;
+  caminhoArmazenado: string;
+  tamanhoBytes: number;
+  mimeType: string;
+  enviadoPor: string;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("tarefa_anexos").insert({
+    tarefa_id: input.tarefaId,
+    nome_original: input.nomeOriginal,
+    caminho_armazenado: input.caminhoArmazenado,
+    tamanho_bytes: input.tamanhoBytes,
+    mime_type: input.mimeType,
+    enviado_por: input.enviadoPor,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function getTarefaAnexo(
+  id: string
+): Promise<{ caminhoArmazenado: string; nomeOriginal: string; mimeType: string } | undefined> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tarefa_anexos")
+    .select("caminho_armazenado, nome_original, mime_type")
+    .eq("id", id)
+    .maybeSingle();
+  return data
+    ? {
+        caminhoArmazenado: data.caminho_armazenado as string,
+        nomeOriginal: data.nome_original as string,
+        mimeType: data.mime_type as string,
+      }
+    : undefined;
+}
+
+export async function deleteTarefaAnexo(id: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("tarefa_anexos").delete().eq("id", id);
 }

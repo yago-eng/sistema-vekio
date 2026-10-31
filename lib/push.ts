@@ -62,3 +62,26 @@ export async function enviarPushParaEquipe(payload: PayloadPush, excluirUserId?:
     // ignora
   }
 }
+
+// Avisa uma pessoa só (ex.: quem recebeu uma tarefa). Mesma regra: nunca quebra a ação.
+export async function enviarPushParaUsuario(userId: string, payload: PayloadPush): Promise<void> {
+  try {
+    if (!configurar()) return;
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("push_subscriptions")
+      .select("endpoint, p256dh, auth")
+      .eq("user_id", userId);
+    const alvo = (data ?? []) as AssinaturaPush[];
+    if (alvo.length === 0) return;
+    const invalidos = await Promise.race([
+      enviarParaAssinaturas(alvo, payload),
+      new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 6000)),
+    ]);
+    if (invalidos.length > 0) {
+      await supabase.from("push_subscriptions").delete().in("endpoint", invalidos);
+    }
+  } catch {
+    // ignora
+  }
+}

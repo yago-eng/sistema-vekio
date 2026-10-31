@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarHeart,
   CheckCircle2,
+  CheckSquare,
   ClipboardList,
   FileText,
   ImageIcon,
@@ -31,6 +32,7 @@ const ICONES: Record<NotificacaoTipo, { icon: LucideIcon; classe: string }> = {
   parcela_vence: { icon: AlertTriangle, classe: "bg-amber-100 text-amber-700" },
   conta_pagar: { icon: AlertTriangle, classe: "bg-amber-100 text-amber-700" },
   data_importante: { icon: CalendarHeart, classe: "bg-pink-100 text-pink-700" },
+  tarefa: { icon: CheckSquare, classe: "bg-sky-100 text-sky-700" },
 };
 
 function quando(iso: string) {

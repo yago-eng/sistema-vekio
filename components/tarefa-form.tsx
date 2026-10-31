@@ -1,0 +1,211 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { salvarTarefaAction } from "@/lib/tarefa-actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  TAREFA_PRIORIDADES,
+  TAREFA_RECORRENCIAS,
+  type MembroEquipe,
+  type Tarefa,
+} from "@/lib/types";
+
+const SEM = "none";
+
+export type ObraOpcao = { id: string; nome: string };
+
+export function TarefaForm({
+  tarefa,
+  membros,
+  obras,
+  obraFixaId,
+  usuarioId,
+  onSalvo,
+  onCancelar,
+}: {
+  tarefa?: Tarefa;
+  membros: MembroEquipe[];
+  obras: ObraOpcao[];
+  obraFixaId?: string;
+  usuarioId: string;
+  onSalvo: (id: string) => void;
+  onCancelar?: () => void;
+}) {
+  const [titulo, setTitulo] = useState(tarefa?.titulo ?? "");
+  const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
+  const [obraId, setObraId] = useState(tarefa?.obraId ?? obraFixaId ?? SEM);
+  const [responsavelId, setResponsavelId] = useState(tarefa ? (tarefa.responsavelId ?? SEM) : usuarioId);
+  const [prazo, setPrazo] = useState(tarefa?.prazo ?? "");
+  const [prioridade, setPrioridade] = useState<string>(tarefa?.prioridade ?? "normal");
+  const [recorrencia, setRecorrencia] = useState<string>(tarefa?.recorrencia ?? "nenhuma");
+  const [erro, setErro] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    startTransition(async () => {
+      const res = await salvarTarefaAction({
+        id: tarefa?.id,
+        obraId: obraId === SEM ? null : obraId,
+        titulo,
+        descricao,
+        prioridade,
+        responsavelId: responsavelId === SEM ? null : responsavelId,
+        prazo: prazo || null,
+        recorrencia,
+      });
+      if (res.error || !res.id) {
+        setErro(res.error ?? "Não foi possível salvar a tarefa.");
+        return;
+      }
+      onSalvo(res.id);
+    });
+  }
+
+  return (
+    <form onSubmit={enviar} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="tarefa-titulo">Título</Label>
+        <Input
+          id="tarefa-titulo"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder="Ex: Pedir orçamento do porcelanato"
+          required
+          autoFocus
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="tarefa-descricao">Descrição (opcional)</Label>
+        <Textarea
+          id="tarefa-descricao"
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Detalhes, links, o que precisa ser feito..."
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {!obraFixaId && (
+          <div className="flex flex-col gap-2">
+            <Label>Obra</Label>
+            <Select
+              value={obraId}
+              onValueChange={(v) => setObraId(String(v))}
+              items={{ [SEM]: "Geral (sem obra)", ...Object.fromEntries(obras.map((o) => [o.id, o.nome])) }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM}>Geral (sem obra)</SelectItem>
+                {obras.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <Label>Responsável</Label>
+          <Select
+            value={responsavelId}
+            onValueChange={(v) => setResponsavelId(String(v))}
+            items={{ [SEM]: "Sem responsável", ...Object.fromEntries(membros.map((m) => [m.id, m.nome])) }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM}>Sem responsável</SelectItem>
+              {membros.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="tarefa-prazo">Prazo</Label>
+          <Input id="tarefa-prazo" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label>Prioridade</Label>
+          <Select
+            value={prioridade}
+            onValueChange={(v) => setPrioridade(String(v))}
+            items={Object.fromEntries(TAREFA_PRIORIDADES.map((p) => [p.id, p.label]))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TAREFA_PRIORIDADES.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label>Repetir</Label>
+          <Select
+            value={recorrencia}
+            onValueChange={(v) => setRecorrencia(String(v))}
+            items={Object.fromEntries(TAREFA_RECORRENCIAS.map((r) => [r.id, r.label]))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TAREFA_RECORRENCIAS.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {recorrencia !== "nenhuma" && (
+        <p className="text-xs text-muted-foreground">
+          Ao concluir esta tarefa, a próxima já é criada automaticamente com o novo prazo.
+        </p>
+      )}
+
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
+
+      <div className="flex justify-end gap-2">
+        {onCancelar && (
+          <Button type="button" variant="outline" onClick={onCancelar} disabled={pending}>
+            Cancelar
+          </Button>
+        )}
+        <Button type="submit" disabled={pending}>
+          {pending ? "Salvando..." : tarefa ? "Salvar" : "Criar tarefa"}
+        </Button>
+      </div>
+    </form>
+  );
+}
