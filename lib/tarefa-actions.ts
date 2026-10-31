@@ -6,7 +6,7 @@ import { getCurrentUser } from "./auth";
 import { createClient } from "./supabase/server";
 import { registrarNotificacao } from "./notificacoes";
 import { interpretarPedidoDeTarefa, type RascunhoTarefa } from "./tarefa-ia";
-import { limitarResponsaveis, podeUsarTarefas, responsavelPermitido } from "./recursos";
+import { limitarResponsaveis, podeUsarTarefas } from "./recursos";
 import {
   ARQUIVOS_BUCKET,
   addChecklistItem,
@@ -109,6 +109,7 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     return { error: "Para repetir a tarefa, defina um prazo." };
   }
 
+  const permitidos = limitarResponsaveis(await listMembrosEquipe());
   const atual = input.id ? await getTarefa(input.id) : undefined;
   if (input.id && !atual) return { error: "Tarefa não encontrada." };
   const pessoal = atual ? atual.pessoal : Boolean(input.pessoal);
@@ -118,7 +119,11 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     titulo,
     descricao: input.descricao.trim(),
     prioridade: input.prioridade as TarefaCampos["prioridade"],
-    responsavelId: pessoal ? user.id : responsavelPermitido(input.responsavelId || null, user),
+    responsavelId: pessoal
+      ? user.id
+      : permitidos.some((m) => m.id === input.responsavelId)
+        ? input.responsavelId
+        : null,
     prazo,
     recorrencia: input.recorrencia as TarefaRecorrencia,
   };
@@ -337,7 +342,7 @@ export async function interpretarTarefaIAAction(
   const res = await interpretarPedidoDeTarefa(pedido, {
     hoje: hojeSP(),
     obras: obras.map((o) => ({ id: o.id, nome: o.nome })),
-    membros: limitarResponsaveis(membros, user).map((m) => ({ id: m.id, nome: m.nome })),
+    membros: limitarResponsaveis(membros).map((m) => ({ id: m.id, nome: m.nome })),
     usuario: { id: user.id, nome: user.nome },
     obraFixaId: opcoes.obraFixaId,
   });

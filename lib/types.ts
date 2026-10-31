@@ -390,4 +390,4 @@ export type TarefaDetalhe = {
   anexos: TarefaAnexo[];
 };
 
-export type MembroEquipe = { id: string; nome: string };
+export type MembroEquipe = { id: string; nome: string; email?: string };

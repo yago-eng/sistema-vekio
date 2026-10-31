@@ -42,7 +42,7 @@ export default async function TarefasPage({
         <TabsContent value="equipe">
           <TarefasPainel
             tarefas={tarefas}
-            membros={limitarResponsaveis(membros, user)}
+            membros={limitarResponsaveis(membros)}
             obras={obras.map((o) => ({ id: o.id, nome: o.nome }))}
             usuarioId={user.id}
             isAdmin={user.role === "admin"}

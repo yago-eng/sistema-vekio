@@ -366,7 +366,7 @@ export default async function ObraDetailPage({
           <TabsContent value="tarefas" className="flex flex-col gap-4">
             <TarefasPainel
               tarefas={tarefasObra}
-              membros={limitarResponsaveis(membrosEquipe, currentUser)}
+              membros={limitarResponsaveis(membrosEquipe)}
               obras={[]}
               usuarioId={currentUser.id}
               isAdmin={isAdmin}

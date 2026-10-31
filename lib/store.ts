@@ -1813,10 +1813,14 @@ export async function listMembrosEquipe(): Promise<MembroEquipe[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, nome")
+    .select("id, nome, email")
     .in("role", ["admin", "equipe"])
     .order("nome");
-  return (data ?? []).map((p) => ({ id: p.id as string, nome: (p.nome as string) || "Sem nome" }));
+  return (data ?? []).map((p) => ({
+    id: p.id as string,
+    nome: (p.nome as string) || "Sem nome",
+    email: (p.email as string | null) ?? undefined,
+  }));
 }
 
 export type TarefaCampos = {

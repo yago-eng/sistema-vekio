@@ -44,9 +44,9 @@ const LIMITE_CONCLUIDAS = 30;
 const PESO_PRIORIDADE: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
 
 const SECOES: { id: TarefaStatus; titulo: string; vazio: string }[] = [
+  { id: "concluida", titulo: "Concluídas", vazio: "Nenhuma tarefa concluída." },
   { id: "fazendo", titulo: "Em andamento", vazio: "Nada em andamento." },
   { id: "a_fazer", titulo: "Pendentes", vazio: "Nenhuma tarefa pendente." },
-  { id: "concluida", titulo: "Concluídas", vazio: "Nenhuma tarefa concluída." },
 ];
 
 export function TarefasPainel({
