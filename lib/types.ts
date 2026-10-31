@@ -359,6 +359,7 @@ export type Tarefa = {
   recorrencia: TarefaRecorrencia;
   criadoPor: string | null;
   pessoal: boolean;
+  gestao: boolean;
   concluidaEm: string | null;
   createdAt: string;
   checklistTotal: number;
@@ -389,4 +390,4 @@ export type TarefaDetalhe = {
   anexos: TarefaAnexo[];
 };
 
-export type MembroEquipe = { id: string; nome: string; email?: string };
+export type MembroEquipe = { id: string; nome: string; email?: string; role?: string };

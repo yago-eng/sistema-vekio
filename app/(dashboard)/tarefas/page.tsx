@@ -4,7 +4,7 @@ import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
 import { listMembrosEquipe, listObras, listObrasFavoritas, listTarefas } from "@/lib/store";
 import { TarefasPainel } from "@/components/tarefas-painel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lock } from "lucide-react";
+import { Briefcase, Lock } from "lucide-react";
 
 export default async function TarefasPage({
   searchParams,
@@ -14,13 +14,25 @@ export default async function TarefasPage({
   const user = await requireUser();
   if (!podeUsarTarefas(user)) redirect("/inicio");
   const { tarefa, aba } = await searchParams;
-  const [tarefas, pessoais, membros, obras, favoritas] = await Promise.all([
+  const ehAdmin = user.role === "admin";
+  const [tarefas, pessoais, gestao, membros, obras, favoritas] = await Promise.all([
     listTarefas(),
     listTarefas({ pessoal: true }),
+    ehAdmin ? listTarefas({ gestao: true }) : Promise.resolve([]),
     listMembrosEquipe(),
     listObras(),
     listObrasFavoritas(user.id),
   ]);
+
+  // O link de um aviso (?tarefa=) abre a aba onde a tarefa está.
+  const abaInicial =
+    aba === "pessoais" || aba === "gestao"
+      ? aba
+      : gestao.some((t) => t.id === tarefa)
+        ? "gestao"
+        : pessoais.some((t) => t.id === tarefa)
+          ? "pessoais"
+          : "equipe";
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,9 +42,15 @@ export default async function TarefasPage({
           Tarefas da empresa e das obras, com responsável, prazo, checklist e comentários.
         </p>
       </div>
-      <Tabs defaultValue={aba === "pessoais" ? "pessoais" : "equipe"} className="flex flex-col gap-4">
+      <Tabs key={abaInicial} defaultValue={abaInicial} className="flex flex-col gap-4">
         <TabsList>
           <TabsTrigger value="equipe">Tarefas</TabsTrigger>
+          {ehAdmin && (
+            <TabsTrigger value="gestao" className="gap-1.5">
+              <Briefcase className="size-3.5" />
+              Gestão
+            </TabsTrigger>
+          )}
           <TabsTrigger value="pessoais" className="gap-1.5">
             <Lock className="size-3.5" />
             Pessoais
@@ -47,9 +65,27 @@ export default async function TarefasPage({
             usuarioId={user.id}
             isAdmin={user.role === "admin"}
             favoritas={favoritas.map((f) => ({ id: f.id, nome: f.nome }))}
-            abrirId={tarefa}
+            atalhoGestao={ehAdmin ? { abertas: gestao.filter((t) => t.status !== "concluida").length } : undefined}
+            abrirId={abaInicial === "equipe" ? tarefa : undefined}
           />
         </TabsContent>
+
+        {ehAdmin && (
+          <TabsContent value="gestao" className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Tarefas da gestão da empresa, sem vínculo com obra. Só os administradores enxergam esta lista.
+            </p>
+            <TarefasPainel
+              tarefas={gestao}
+              membros={limitarResponsaveis(membros, { gestao: true })}
+              obras={[]}
+              usuarioId={user.id}
+              isAdmin={ehAdmin}
+              gestao
+              abrirId={abaInicial === "gestao" ? tarefa : undefined}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="pessoais" className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
@@ -62,6 +98,7 @@ export default async function TarefasPage({
             usuarioId={user.id}
             isAdmin={false}
             pessoal
+            abrirId={abaInicial === "pessoais" ? tarefa : undefined}
           />
         </TabsContent>
       </Tabs>

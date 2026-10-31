@@ -1749,6 +1749,7 @@ function mapTarefa(row: Record<string, unknown>, nomes: Map<string, string>): Ta
     recorrencia: row.recorrencia as TarefaRecorrencia,
     criadoPor: (row.criado_por as string | null) ?? null,
     pessoal: Boolean(row.pessoal),
+    gestao: Boolean(row.gestao),
     concluidaEm: (row.concluida_em as string | null) ?? null,
     createdAt: row.created_at as string,
     checklistTotal: checklist.length,
@@ -1758,14 +1759,15 @@ function mapTarefa(row: Record<string, unknown>, nomes: Map<string, string>): Ta
   };
 }
 
-// pessoal: false (padrão) = tarefas da equipe; true = só as tarefas pessoais de quem está logado
-// (o banco já esconde as pessoais dos outros; o filtro aqui separa as listas).
-export async function listTarefas(filtro?: { obraId?: string; pessoal?: boolean }): Promise<Tarefa[]> {
+// Três listas separadas: comuns (padrão), pessoais (só do dono) e gestão (só admin).
+// O banco já esconde o que a pessoa não pode ver; o filtro aqui separa as listas.
+export async function listTarefas(filtro?: { obraId?: string; pessoal?: boolean; gestao?: boolean }): Promise<Tarefa[]> {
   const supabase = await createClient();
   let query = supabase
     .from("tarefas")
     .select(TAREFA_SELECT)
     .eq("pessoal", filtro?.pessoal ?? false)
+    .eq("gestao", filtro?.gestao ?? false)
     .order("created_at", { ascending: false });
   if (filtro?.obraId) query = query.eq("obra_id", filtro.obraId);
   const { data } = await query;
@@ -1826,13 +1828,14 @@ export async function listMembrosEquipe(): Promise<MembroEquipe[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, nome, email")
+    .select("id, nome, email, role")
     .in("role", ["admin", "equipe"])
     .order("nome");
   return (data ?? []).map((p) => ({
     id: p.id as string,
     nome: (p.nome as string) || "Sem nome",
     email: (p.email as string | null) ?? undefined,
+    role: (p.role as string | null) ?? undefined,
   }));
 }
 
@@ -1847,7 +1850,7 @@ export type TarefaCampos = {
 };
 
 export async function createTarefa(
-  input: TarefaCampos & { criadoPor: string; pessoal?: boolean }
+  input: TarefaCampos & { criadoPor: string; pessoal?: boolean; gestao?: boolean }
 ): Promise<string> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1863,6 +1866,7 @@ export async function createTarefa(
       recorrencia: input.recorrencia,
       criado_por: input.criadoPor,
       pessoal: input.pessoal ?? false,
+      gestao: input.gestao ?? false,
     })
     .select("id")
     .single();

@@ -292,7 +292,7 @@ export async function listarNotificacoes(
         ? `Prazo era ${t.prazo.split("-").reverse().join("/")}${t.obras ? ` · ${t.obras.nome}` : ""}`
         : (t.obras?.nome ?? "Tarefa da empresa"),
       obraNome: t.obras?.nome ?? null,
-      link: "/tarefas",
+      link: `/tarefas?tarefa=${t.id}`,
       quando: inicioHoje,
       lida: false,
       propria: false,

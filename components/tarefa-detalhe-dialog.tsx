@@ -261,7 +261,7 @@ export function TarefaDetalheDialog({
                   {atrasada && " · atrasada"}
                 </dd>
               </div>
-              {!t.pessoal && (
+              {!t.pessoal && !t.gestao && (
                 <div>
                   <dt className="text-xs text-muted-foreground">Obra</dt>
                   <dd>{t.obraNome ?? "Geral"}</dd>

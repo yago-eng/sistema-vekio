@@ -94,6 +94,7 @@ export type SalvarTarefaInput = {
   prazo: string | null;
   recorrencia: string;
   pessoal?: boolean; // só na criação; tarefa pessoal só o dono enxerga
+  gestao?: boolean; // só na criação; lista Gestão, só administradores
   checklist?: string[]; // só na criação (ex.: vindo da IA)
 };
 
@@ -109,13 +110,15 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     return { error: "Para repetir a tarefa, defina um prazo." };
   }
 
-  const permitidos = limitarResponsaveis(await listMembrosEquipe());
   const atual = input.id ? await getTarefa(input.id) : undefined;
   if (input.id && !atual) return { error: "Tarefa não encontrada." };
   const pessoal = atual ? atual.pessoal : Boolean(input.pessoal);
+  const gestao = !pessoal && (atual ? atual.gestao : Boolean(input.gestao));
+  if (gestao && user.role !== "admin") return { error: "A lista Gestão é só para administradores." };
+  const permitidos = limitarResponsaveis(await listMembrosEquipe(), { gestao });
 
   const campos: TarefaCampos = {
-    obraId: pessoal ? null : input.obraId || null,
+    obraId: pessoal || gestao ? null : input.obraId || null,
     titulo,
     descricao: input.descricao.trim(),
     prioridade: input.prioridade as TarefaCampos["prioridade"],
@@ -135,7 +138,7 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
       obraAnterior = atual?.obraId ?? null;
       await updateTarefa(id, campos);
     } else {
-      id = await createTarefa({ ...campos, criadoPor: user.id, pessoal });
+      id = await createTarefa({ ...campos, criadoPor: user.id, pessoal, gestao });
       const itens = (input.checklist ?? []).map((i) => i.trim()).filter(Boolean).slice(0, 20);
       for (let n = 0; n < itens.length; n++) await addChecklistItem(id, itens[n], n);
     }
@@ -188,6 +191,7 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
         recorrencia: tarefa.recorrencia,
         criadoPor: user.id,
         pessoal: tarefa.pessoal,
+        gestao: tarefa.gestao,
       });
       await copiarChecklist(id, proximaId);
     }
@@ -333,7 +337,7 @@ export async function excluirAnexoTarefaAction(id: string) {
 
 export async function interpretarTarefaIAAction(
   texto: string,
-  opcoes: { pessoal?: boolean; obraFixaId?: string }
+  opcoes: { pessoal?: boolean; gestao?: boolean; obraFixaId?: string }
 ): Promise<{ rascunho?: RascunhoTarefa; error?: string }> {
   const user = await exigirEquipe();
   const pedido = texto.trim();
@@ -341,21 +345,22 @@ export async function interpretarTarefaIAAction(
   if (pedido.length > 1500) return { error: "O pedido está muito longo. Resuma um pouco." };
 
   const [obras, membros] = await Promise.all([
-    opcoes.pessoal ? Promise.resolve([]) : listObras(),
+    opcoes.pessoal || opcoes.gestao ? Promise.resolve([]) : listObras(),
     listMembrosEquipe(),
   ]);
   const res = await interpretarPedidoDeTarefa(pedido, {
     hoje: hojeSP(),
     obras: obras.map((o) => ({ id: o.id, nome: o.nome })),
-    membros: limitarResponsaveis(membros).map((m) => ({ id: m.id, nome: m.nome })),
+    membros: limitarResponsaveis(membros, { gestao: opcoes.gestao }).map((m) => ({ id: m.id, nome: m.nome })),
     usuario: { id: user.id, nome: user.nome },
     obraFixaId: opcoes.obraFixaId,
   });
   if ("error" in res) return { error: res.error };
 
   const rascunho = res.rascunho;
+  if (opcoes.gestao && user.role !== "admin") return { error: "A lista Gestão é só para administradores." };
+  if (opcoes.pessoal || opcoes.gestao) rascunho.obraId = null;
   if (opcoes.pessoal) {
-    rascunho.obraId = null;
     rascunho.responsavelIds = [user.id];
   }
   return { rascunho };

@@ -75,7 +75,7 @@ export default async function InicioPage() {
   const hojeSP = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const tarefasDoDia =
     user && podeUsarTarefas(user)
-      ? (await listTarefas())
+      ? [...(await listTarefas()), ...(user.role === "admin" ? await listTarefas({ gestao: true }) : [])]
           .filter(
             (t) =>
               t.status !== "concluida" &&

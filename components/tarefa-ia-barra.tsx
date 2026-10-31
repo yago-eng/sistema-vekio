@@ -44,6 +44,7 @@ function resumo(r: RascunhoTarefa, obras: ObraOpcao[], membros: MembroEquipe[], 
 
 export function TarefaIaBarra({
   pessoal,
+  gestao = false,
   obraFixaId,
   obraAtualId,
   membros,
@@ -52,6 +53,7 @@ export function TarefaIaBarra({
   onAbrir,
 }: {
   pessoal: boolean;
+  gestao?: boolean;
   obraFixaId?: string;
   obraAtualId?: string; // obra filtrada na lista: a IA assume essa obra, a menos que o pedido cite outra
   membros: MembroEquipe[];
@@ -138,7 +140,7 @@ export function TarefaIaBarra({
     setErro(null);
     setCriada(null);
     startTransition(async () => {
-      const res = await interpretarTarefaIAAction(texto, { pessoal, obraFixaId: obraFixaId ?? obraAtualId });
+      const res = await interpretarTarefaIAAction(texto, { pessoal, gestao, obraFixaId: obraFixaId ?? obraAtualId });
       if (res.error || !res.rascunho) {
         setErro(res.error ?? "Não consegui montar a tarefa.");
         return;
@@ -157,6 +159,7 @@ export function TarefaIaBarra({
         prazo: r.prazo,
         recorrencia: r.recorrencia,
         pessoal,
+        gestao,
         checklist: r.checklist,
       });
       if (salva.error || !salva.id) {
@@ -248,6 +251,7 @@ export function TarefaIaBarra({
               obraInicialId={obraAtualId}
               usuarioId={usuarioId}
               pessoal={pessoal}
+              gestao={gestao}
               onCancelar={() => setRascunho(null)}
               onSalvo={(id) => {
                 const r = rascunho;

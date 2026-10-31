@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { mudarStatusTarefaAction } from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
 import { TarefasCalendario } from "@/components/tarefas-calendario";
 import { COR_PRIORIDADE, TarefaDetalheDialog, formatarPrazo } from "@/components/tarefa-detalhe-dialog";
 import {
+  Briefcase,
   CalendarDays,
   Check,
   CheckSquare,
@@ -68,7 +70,9 @@ export function TarefasPainel({
   isAdmin,
   obraFixaId,
   pessoal = false,
+  gestao = false,
   favoritas = [],
+  atalhoGestao,
   abrirId,
 }: {
   tarefas: Tarefa[];
@@ -78,12 +82,14 @@ export function TarefasPainel({
   isAdmin: boolean;
   obraFixaId?: string;
   pessoal?: boolean;
+  gestao?: boolean;
   favoritas?: ObraOpcao[];
+  atalhoGestao?: { abertas: number }; // atalho para a lista Gestão (só administradores)
   abrirId?: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [responsavel, setResponsavel] = useState<string>(obraFixaId || pessoal ? TODAS : MINHAS);
+  const [responsavel, setResponsavel] = useState<string>(obraFixaId || pessoal || gestao ? TODAS : MINHAS);
   const [obra, setObra] = useState<string>(TODAS);
   const [busca, setBusca] = useState("");
   const [criando, setCriando] = useState(false);
@@ -109,7 +115,7 @@ export function TarefasPainel({
   }
 
   // Seções recolhidas ficam salvas neste aparelho; "Concluídas" começa recolhida.
-  const chaveRecolhidas = `tarefas-recolhidas-${pessoal ? "pessoal" : obraFixaId ? "obra" : "equipe"}`;
+  const chaveRecolhidas = `tarefas-recolhidas-${pessoal ? "pessoal" : gestao ? "gestao" : obraFixaId ? "obra" : "equipe"}`;
   const [recolhidas, setRecolhidas] = useState<Record<string, boolean>>({ concluida: true });
   useEffect(() => {
     try {
@@ -130,7 +136,7 @@ export function TarefasPainel({
 
   const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const mostrarFiltroResponsavel = !pessoal;
-  const mostrarFiltroObra = !pessoal && !obraFixaId;
+  const mostrarFiltroObra = !pessoal && !gestao && !obraFixaId;
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -357,6 +363,7 @@ export function TarefasPainel({
     <div className="flex flex-col gap-4">
       <TarefaIaBarra
         pessoal={pessoal}
+        gestao={gestao}
         obraFixaId={obraFixaId}
         obraAtualId={mostrarFiltroObra && obra !== TODAS && obra !== "geral" ? obra : undefined}
         membros={membros}
@@ -365,12 +372,30 @@ export function TarefasPainel({
         onAbrir={setAbertaId}
       />
 
-      {mostrarFiltroObra && favoritas.length > 0 && (
+      {mostrarFiltroObra && (favoritas.length > 0 || atalhoGestao) && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
             <Star className="size-4 fill-amber-400 text-amber-500" />
-            Obras favoritas
+            Favoritos
           </span>
+          {atalhoGestao && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2 rounded-full"
+              nativeButton={false}
+              render={<Link href="/tarefas?aba=gestao" />}
+            >
+              <Briefcase className="size-3.5" />
+              Gestão
+              {atalhoGestao.abertas > 0 && (
+                <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+                  {atalhoGestao.abertas}
+                </span>
+              )}
+            </Button>
+          )}
           {favoritas.map((f) => {
             const abertas = tarefas.filter((t) => t.obraId === f.id && t.status !== "concluida").length;
             const ativa = obra === f.id;
@@ -551,7 +576,7 @@ export function TarefasPainel({
 
       {tarefas.length > 0 && visao === "quadro" && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {secoes.map((s) => {
+          {[...secoes].reverse().map((s) => {
             const itens = s.id === "concluida" && !verTodasConcluidas ? s.itens.slice(0, LIMITE_CONCLUIDAS) : s.itens;
             return (
               <section
@@ -599,7 +624,7 @@ export function TarefasPainel({
       <Dialog open={criando} onOpenChange={setCriando}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{pessoal ? "Nova tarefa pessoal" : "Nova tarefa"}</DialogTitle>
+            <DialogTitle>{pessoal ? "Nova tarefa pessoal" : gestao ? "Nova tarefa de gestão" : "Nova tarefa"}</DialogTitle>
           </DialogHeader>
           <TarefaForm
             membros={membros}
@@ -608,6 +633,7 @@ export function TarefasPainel({
             obraInicialId={mostrarFiltroObra && obra !== TODAS && obra !== "geral" ? obra : undefined}
             usuarioId={usuarioId}
             pessoal={pessoal}
+            gestao={gestao}
             onCancelar={() => setCriando(false)}
             onSalvo={() => {
               setCriando(false);

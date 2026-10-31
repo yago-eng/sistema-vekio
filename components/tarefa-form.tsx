@@ -33,6 +33,7 @@ export function TarefaForm({
   obraInicialId,
   usuarioId,
   pessoal: pessoalProp,
+  gestao: gestaoProp,
   rascunho,
   onSalvo,
   onCancelar,
@@ -44,11 +45,13 @@ export function TarefaForm({
   obraInicialId?: string; // obra pré-selecionada (o campo continua editável)
   usuarioId: string;
   pessoal?: boolean;
+  gestao?: boolean;
   rascunho?: RascunhoTarefa; // sugestão vinda da IA, para o usuário revisar
   onSalvo: (id: string) => void;
   onCancelar?: () => void;
 }) {
   const pessoal = tarefa ? tarefa.pessoal : Boolean(pessoalProp);
+  const gestao = tarefa ? tarefa.gestao : Boolean(gestaoProp);
   const [titulo, setTitulo] = useState(tarefa?.titulo ?? rascunho?.titulo ?? "");
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? rascunho?.descricao ?? "");
   const [obraId, setObraId] = useState(tarefa?.obraId ?? rascunho?.obraId ?? obraFixaId ?? obraInicialId ?? SEM);
@@ -75,6 +78,7 @@ export function TarefaForm({
         prazo: prazo || null,
         recorrencia,
         pessoal,
+        gestao,
         checklist: tarefa ? undefined : rascunho?.checklist,
       });
       if (res.error || !res.id) {
@@ -109,7 +113,7 @@ export function TarefaForm({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {!obraFixaId && !pessoal && (
+        {!obraFixaId && !pessoal && !gestao && (
           <div className="flex flex-col gap-2">
             <Label>Obra</Label>
             <Select
