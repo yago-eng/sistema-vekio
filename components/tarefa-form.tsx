@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { RascunhoTarefa } from "@/lib/tarefa-ia";
 import {
   TAREFA_PRIORIDADES,
   TAREFA_RECORRENCIAS,
@@ -30,6 +31,8 @@ export function TarefaForm({
   obras,
   obraFixaId,
   usuarioId,
+  pessoal: pessoalProp,
+  rascunho,
   onSalvo,
   onCancelar,
 }: {
@@ -38,16 +41,21 @@ export function TarefaForm({
   obras: ObraOpcao[];
   obraFixaId?: string;
   usuarioId: string;
+  pessoal?: boolean;
+  rascunho?: RascunhoTarefa; // sugestão vinda da IA, para o usuário revisar
   onSalvo: (id: string) => void;
   onCancelar?: () => void;
 }) {
-  const [titulo, setTitulo] = useState(tarefa?.titulo ?? "");
-  const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
-  const [obraId, setObraId] = useState(tarefa?.obraId ?? obraFixaId ?? SEM);
-  const [responsavelId, setResponsavelId] = useState(tarefa ? (tarefa.responsavelId ?? SEM) : usuarioId);
-  const [prazo, setPrazo] = useState(tarefa?.prazo ?? "");
-  const [prioridade, setPrioridade] = useState<string>(tarefa?.prioridade ?? "normal");
-  const [recorrencia, setRecorrencia] = useState<string>(tarefa?.recorrencia ?? "nenhuma");
+  const pessoal = tarefa ? tarefa.pessoal : Boolean(pessoalProp);
+  const [titulo, setTitulo] = useState(tarefa?.titulo ?? rascunho?.titulo ?? "");
+  const [descricao, setDescricao] = useState(tarefa?.descricao ?? rascunho?.descricao ?? "");
+  const [obraId, setObraId] = useState(tarefa?.obraId ?? rascunho?.obraId ?? obraFixaId ?? SEM);
+  const [responsavelId, setResponsavelId] = useState(
+    tarefa ? (tarefa.responsavelId ?? SEM) : (rascunho?.responsavelId ?? usuarioId)
+  );
+  const [prazo, setPrazo] = useState(tarefa?.prazo ?? rascunho?.prazo ?? "");
+  const [prioridade, setPrioridade] = useState<string>(tarefa?.prioridade ?? rascunho?.prioridade ?? "normal");
+  const [recorrencia, setRecorrencia] = useState<string>(tarefa?.recorrencia ?? rascunho?.recorrencia ?? "nenhuma");
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -64,6 +72,8 @@ export function TarefaForm({
         responsavelId: responsavelId === SEM ? null : responsavelId,
         prazo: prazo || null,
         recorrencia,
+        pessoal,
+        checklist: tarefa ? undefined : rascunho?.checklist,
       });
       if (res.error || !res.id) {
         setErro(res.error ?? "Não foi possível salvar a tarefa.");
@@ -98,7 +108,7 @@ export function TarefaForm({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {!obraFixaId && (
+        {!obraFixaId && !pessoal && (
           <div className="flex flex-col gap-2">
             <Label>Obra</Label>
             <Select
@@ -121,6 +131,7 @@ export function TarefaForm({
           </div>
         )}
 
+        {!pessoal && (
         <div className="flex flex-col gap-2">
           <Label>Responsável</Label>
           <Select
@@ -141,6 +152,7 @@ export function TarefaForm({
             </SelectContent>
           </Select>
         </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="tarefa-prazo">Prazo</Label>
@@ -187,6 +199,17 @@ export function TarefaForm({
           </Select>
         </div>
       </div>
+
+      {!tarefa && rascunho && rascunho.checklist.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="text-xs text-muted-foreground">Checklist sugerido (você pode editar depois de criar):</p>
+          <ul className="list-disc pl-5">
+            {rascunho.checklist.map((i, n) => (
+              <li key={n}>{i}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {recorrencia !== "nenhuma" && (
         <p className="text-xs text-muted-foreground">

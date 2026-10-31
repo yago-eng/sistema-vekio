@@ -1736,6 +1736,7 @@ function mapTarefa(row: Record<string, unknown>): Tarefa {
     prazo: (row.prazo as string | null) ?? null,
     recorrencia: row.recorrencia as TarefaRecorrencia,
     criadoPor: (row.criado_por as string | null) ?? null,
+    pessoal: Boolean(row.pessoal),
     concluidaEm: (row.concluida_em as string | null) ?? null,
     createdAt: row.created_at as string,
     checklistTotal: checklist.length,
@@ -1745,9 +1746,15 @@ function mapTarefa(row: Record<string, unknown>): Tarefa {
   };
 }
 
-export async function listTarefas(filtro?: { obraId?: string }): Promise<Tarefa[]> {
+// pessoal: false (padrão) = tarefas da equipe; true = só as tarefas pessoais de quem está logado
+// (o banco já esconde as pessoais dos outros; o filtro aqui separa as listas).
+export async function listTarefas(filtro?: { obraId?: string; pessoal?: boolean }): Promise<Tarefa[]> {
   const supabase = await createClient();
-  let query = supabase.from("tarefas").select(TAREFA_SELECT).order("created_at", { ascending: false });
+  let query = supabase
+    .from("tarefas")
+    .select(TAREFA_SELECT)
+    .eq("pessoal", filtro?.pessoal ?? false)
+    .order("created_at", { ascending: false });
   if (filtro?.obraId) query = query.eq("obra_id", filtro.obraId);
   const { data } = await query;
   return (data ?? []).map(mapTarefa);
@@ -1822,7 +1829,9 @@ export type TarefaCampos = {
   recorrencia: TarefaRecorrencia;
 };
 
-export async function createTarefa(input: TarefaCampos & { criadoPor: string }): Promise<string> {
+export async function createTarefa(
+  input: TarefaCampos & { criadoPor: string; pessoal?: boolean }
+): Promise<string> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tarefas")
@@ -1835,6 +1844,7 @@ export async function createTarefa(input: TarefaCampos & { criadoPor: string }):
       prazo: input.prazo,
       recorrencia: input.recorrencia,
       criado_por: input.criadoPor,
+      pessoal: input.pessoal ?? false,
     })
     .select("id")
     .single();
@@ -1963,4 +1973,36 @@ export async function getTarefaAnexo(
 export async function deleteTarefaAnexo(id: string): Promise<void> {
   const supabase = await createClient();
   await supabase.from("tarefa_anexos").delete().eq("id", id);
+}
+
+
+// --- Obras favoritas (acesso rápido de cada usuário) ---
+
+export async function listObrasFavoritas(userId: string): Promise<{ id: string; nome: string; regiao: string; status: string }[]> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("obra_favoritas")
+      .select("created_at, obras(id, nome, regiao, status)")
+      .eq("user_id", userId)
+      .order("created_at");
+    return (data ?? [])
+      .map((f) => f.obras as unknown as { id: string; nome: string; regiao: string; status: string } | null)
+      .filter((o): o is { id: string; nome: string; regiao: string; status: string } => !!o)
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  } catch {
+    return [];
+  }
+}
+
+export async function setObraFavorita(userId: string, obraId: string, favorita: boolean): Promise<void> {
+  const supabase = await createClient();
+  if (favorita) {
+    const { error } = await supabase
+      .from("obra_favoritas")
+      .upsert({ user_id: userId, obra_id: obraId }, { onConflict: "user_id,obra_id" });
+    if (error) throw new Error(error.message);
+  } else {
+    await supabase.from("obra_favoritas").delete().eq("user_id", userId).eq("obra_id", obraId);
+  }
 }

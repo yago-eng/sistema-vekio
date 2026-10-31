@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { listObras } from "@/lib/store";
+import { listObras, listObrasFavoritas } from "@/lib/store";
+import { podeUsarFavoritas } from "@/lib/recursos";
+import { FavoritaBotao } from "@/components/favorita-botao";
+import { Star } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { REGIOES } from "@/lib/types";
 import { ObraFormDialog } from "@/components/obra-form-dialog";
@@ -25,7 +28,11 @@ export default async function ObrasPage({
 }) {
   const { regiao: regiaoAtual, ano: anoAtual } = await searchParams;
   const obras = await listObras();
-  const isAdmin = (await getCurrentUser())?.role === "admin";
+  const usuario = await getCurrentUser();
+  const isAdmin = usuario?.role === "admin";
+  const favoritasAtivas = !!usuario && podeUsarFavoritas(usuario);
+  const favoritas = favoritasAtivas ? await listObrasFavoritas(usuario.id) : [];
+  const idsFavoritas = new Set(favoritas.map((f) => f.id));
 
   const defaultRegiao =
     regiaoAtual && REGIOES.includes(regiaoAtual as (typeof REGIOES)[number])
@@ -43,6 +50,24 @@ export default async function ObrasPage({
         </div>
         <ObraFormDialog isAdmin={isAdmin} />
       </div>
+
+      {favoritas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+            <Star className="size-4 fill-amber-400 text-amber-500" />
+            Favoritas
+          </span>
+          {favoritas.map((f) => (
+            <Link
+              key={f.id}
+              href={`/obras/${f.id}`}
+              className="rounded-full border px-3 py-1 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+            >
+              {f.nome}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <Tabs defaultValue={defaultRegiao}>
         <TabsList>
@@ -99,7 +124,8 @@ export default async function ObrasPage({
                         </p>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                           {obrasDoAno.map((obra) => (
-                            <Link key={obra.id} href={`/obras/${obra.id}?${voltarQuery}`}>
+                            <div key={obra.id} className="relative">
+                            <Link href={`/obras/${obra.id}?${voltarQuery}`}>
                               <Card className="h-full transition-shadow hover:shadow-md">
                                 <CardHeader>
                                   <div className="flex items-start justify-between gap-2">
@@ -118,6 +144,14 @@ export default async function ObrasPage({
                                 </CardContent>
                               </Card>
                             </Link>
+                            {favoritasAtivas && (
+                              <FavoritaBotao
+                                obraId={obra.id}
+                                favorita={idsFavoritas.has(obra.id)}
+                                className="absolute right-2 bottom-2"
+                              />
+                            )}
+                            </div>
                           ))}
                         </div>
                       </TabsContent>

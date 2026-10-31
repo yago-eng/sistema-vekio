@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { mudarStatusTarefaAction } from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
@@ -16,33 +16,35 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
+import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
 import { COR_PRIORIDADE, TarefaDetalheDialog, formatarPrazo } from "@/components/tarefa-detalhe-dialog";
-import { CheckSquare, ListChecks, MessageSquare, Paperclip, Plus, Repeat, User } from "lucide-react";
-import { TAREFA_PRIORIDADES, type MembroEquipe, type Tarefa } from "@/lib/types";
-
-type FiltroStatus = "abertas" | "concluidas" | "todas";
+import {
+  CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  ListChecks,
+  MessageSquare,
+  Paperclip,
+  Pause,
+  Play,
+  Plus,
+  Repeat,
+  User,
+} from "lucide-react";
+import { TAREFA_PRIORIDADES, type MembroEquipe, type Tarefa, type TarefaStatus } from "@/lib/types";
 
 const MINHAS = "minhas";
 const TODAS = "todas";
 const SEM_RESPONSAVEL = "sem";
+const LIMITE_CONCLUIDAS = 30;
 
-function somarDias(iso: string, dias: number) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + dias);
-  return d.toISOString().slice(0, 10);
-}
-
-function grupoDoPrazo(t: Tarefa, hoje: string): string {
-  if (t.status === "concluida") return "Concluídas";
-  if (!t.prazo) return "Sem prazo";
-  if (t.prazo < hoje) return "Atrasadas";
-  if (t.prazo === hoje) return "Hoje";
-  if (t.prazo <= somarDias(hoje, 7)) return "Próximos 7 dias";
-  return "Depois";
-}
-
-const ORDEM_GRUPOS = ["Atrasadas", "Hoje", "Próximos 7 dias", "Depois", "Sem prazo", "Concluídas"];
 const PESO_PRIORIDADE: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
+
+const SECOES: { id: TarefaStatus; titulo: string; vazio: string }[] = [
+  { id: "fazendo", titulo: "Em andamento", vazio: "Nada em andamento." },
+  { id: "a_fazer", titulo: "Pendentes", vazio: "Nenhuma tarefa pendente." },
+  { id: "concluida", titulo: "Concluídas", vazio: "Nenhuma tarefa concluída." },
+];
 
 export function TarefasPainel({
   tarefas,
@@ -51,6 +53,7 @@ export function TarefasPainel({
   usuarioId,
   isAdmin,
   obraFixaId,
+  pessoal = false,
   abrirId,
 }: {
   tarefas: Tarefa[];
@@ -59,59 +62,73 @@ export function TarefasPainel({
   usuarioId: string;
   isAdmin: boolean;
   obraFixaId?: string;
+  pessoal?: boolean;
   abrirId?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [responsavel, setResponsavel] = useState<string>(obraFixaId ? TODAS : MINHAS);
-  const [status, setStatus] = useState<FiltroStatus>("abertas");
+  const [responsavel, setResponsavel] = useState<string>(obraFixaId || pessoal ? TODAS : MINHAS);
   const [obra, setObra] = useState<string>(TODAS);
   const [busca, setBusca] = useState("");
   const [criando, setCriando] = useState(false);
   const [abertaId, setAbertaId] = useState<string | null>(abrirId ?? null);
+  const [verTodasConcluidas, setVerTodasConcluidas] = useState(false);
+
+  // Seções recolhidas ficam salvas neste aparelho; "Concluídas" começa recolhida.
+  const chaveRecolhidas = `tarefas-recolhidas-${pessoal ? "pessoal" : obraFixaId ? "obra" : "equipe"}`;
+  const [recolhidas, setRecolhidas] = useState<Record<string, boolean>>({ concluida: true });
+  useEffect(() => {
+    try {
+      const salvo = window.localStorage.getItem(chaveRecolhidas);
+      if (salvo) setRecolhidas(JSON.parse(salvo));
+    } catch {}
+  }, [chaveRecolhidas]);
+
+  function alternarSecao(id: string) {
+    setRecolhidas((atual) => {
+      const novo = { ...atual, [id]: !atual[id] };
+      try {
+        window.localStorage.setItem(chaveRecolhidas, JSON.stringify(novo));
+      } catch {}
+      return novo;
+    });
+  }
 
   const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const mostrarFiltroResponsavel = !pessoal;
+  const mostrarFiltroObra = !pessoal && !obraFixaId;
 
-  const filtradas = useMemo(() => {
+  const secoes = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return tarefas.filter((t) => {
+    const filtradas = tarefas.filter((t) => {
       if (responsavel === MINHAS && t.responsavelId !== usuarioId) return false;
       if (responsavel === SEM_RESPONSAVEL && t.responsavelId) return false;
       if (responsavel !== MINHAS && responsavel !== TODAS && responsavel !== SEM_RESPONSAVEL && t.responsavelId !== responsavel) {
         return false;
       }
-      if (status === "abertas" && t.status === "concluida") return false;
-      if (status === "concluidas" && t.status !== "concluida") return false;
       if (obra === "geral" && t.obraId) return false;
       if (obra !== TODAS && obra !== "geral" && t.obraId !== obra) return false;
       if (termo && !`${t.titulo} ${t.descricao}`.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [tarefas, responsavel, status, obra, busca, usuarioId]);
-
-  const grupos = useMemo(() => {
-    const mapa = new Map<string, Tarefa[]>();
-    for (const t of filtradas) {
-      const g = grupoDoPrazo(t, hoje);
-      if (!mapa.has(g)) mapa.set(g, []);
-      mapa.get(g)!.push(t);
-    }
-    return ORDEM_GRUPOS.filter((g) => mapa.has(g)).map((g) => ({
-      nome: g,
-      itens: mapa.get(g)!.sort((a, b) => {
-        if (g === "Concluídas") return (b.concluidaEm ?? "").localeCompare(a.concluidaEm ?? "");
-        return (
-          (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") ||
-          PESO_PRIORIDADE[a.prioridade] - PESO_PRIORIDADE[b.prioridade] ||
-          a.titulo.localeCompare(b.titulo)
-        );
-      }),
+    return SECOES.map((s) => ({
+      ...s,
+      itens: filtradas
+        .filter((t) => t.status === s.id)
+        .sort((a, b) => {
+          if (s.id === "concluida") return (b.concluidaEm ?? "").localeCompare(a.concluidaEm ?? "");
+          return (
+            (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") ||
+            PESO_PRIORIDADE[a.prioridade] - PESO_PRIORIDADE[b.prioridade] ||
+            a.titulo.localeCompare(b.titulo)
+          );
+        }),
     }));
-  }, [filtradas, hoje]);
+  }, [tarefas, responsavel, obra, busca, usuarioId]);
 
-  function alternarConcluida(t: Tarefa, concluir: boolean) {
+  function mover(t: Tarefa, status: TarefaStatus) {
     startTransition(async () => {
-      await mudarStatusTarefaAction(t.id, concluir ? "concluida" : "a_fazer");
+      await mudarStatusTarefaAction(t.id, status);
       router.refresh();
     });
   }
@@ -130,24 +147,35 @@ export function TarefasPainel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Select value={responsavel} onValueChange={(v) => setResponsavel(String(v))} items={itensResponsavel}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={MINHAS}>Minhas tarefas</SelectItem>
-            <SelectItem value={TODAS}>Todas as pessoas</SelectItem>
-            <SelectItem value={SEM_RESPONSAVEL}>Sem responsável</SelectItem>
-            {membros.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <TarefaIaBarra
+        pessoal={pessoal}
+        obraFixaId={obraFixaId}
+        membros={membros}
+        obras={obras}
+        usuarioId={usuarioId}
+        onAbrir={setAbertaId}
+      />
 
-        {!obraFixaId && (
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        {mostrarFiltroResponsavel && (
+          <Select value={responsavel} onValueChange={(v) => setResponsavel(String(v))} items={itensResponsavel}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={MINHAS}>Minhas tarefas</SelectItem>
+              <SelectItem value={TODAS}>Todas as pessoas</SelectItem>
+              <SelectItem value={SEM_RESPONSAVEL}>Sem responsável</SelectItem>
+              {membros.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {mostrarFiltroObra && (
           <Select value={obra} onValueChange={(v) => setObra(String(v))} items={itensObra}>
             <SelectTrigger className="w-full sm:w-52">
               <SelectValue />
@@ -164,26 +192,6 @@ export function TarefasPainel({
           </Select>
         )}
 
-        <div className="flex gap-1">
-          {(
-            [
-              ["abertas", "Abertas"],
-              ["concluidas", "Concluídas"],
-              ["todas", "Todas"],
-            ] as const
-          ).map(([id, label]) => (
-            <Button
-              key={id}
-              type="button"
-              size="sm"
-              variant={status === id ? "default" : "outline"}
-              onClick={() => setStatus(id)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
@@ -197,112 +205,166 @@ export function TarefasPainel({
         </Button>
       </div>
 
-      {grupos.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+      {tarefas.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
           <CheckSquare className="size-8" />
-          <p>
-            {tarefas.length === 0
-              ? "Nenhuma tarefa ainda. Crie a primeira em Nova tarefa."
-              : "Nenhuma tarefa encontrada com esses filtros."}
-          </p>
+          <p>Nenhuma tarefa ainda. Crie a primeira em Nova tarefa{pessoal ? "" : " ou peça para a IA"}.</p>
         </div>
-      ) : (
-        grupos.map((g) => (
-          <section key={g.nome} className="flex flex-col gap-2">
-            <h3
-              className={
-                g.nome === "Atrasadas"
-                  ? "text-sm font-semibold text-destructive"
-                  : "text-sm font-semibold text-muted-foreground"
-              }
-            >
-              {g.nome} <span className="font-normal">({g.itens.length})</span>
-            </h3>
-            {g.itens.map((t) => {
-              const atrasada = t.status !== "concluida" && !!t.prazo && t.prazo < hoje;
-              return (
-                <div
-                  key={t.id}
-                  className="flex items-start gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40"
-                >
-                  <Checkbox
-                    className="mt-1"
-                    checked={t.status === "concluida"}
-                    disabled={pending}
-                    onCheckedChange={(v) => alternarConcluida(t, !!v)}
-                    aria-label="Concluir tarefa"
-                  />
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-                    onClick={() => setAbertaId(t.id)}
-                  >
-                    <span
-                      className={
-                        t.status === "concluida"
-                          ? "text-sm text-muted-foreground line-through"
-                          : "text-sm font-medium"
-                      }
-                    >
-                      {t.titulo}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {t.status === "fazendo" && <Badge variant="secondary">Fazendo</Badge>}
-                      {(t.prioridade === "urgente" || t.prioridade === "alta") && (
-                        <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
-                          {TAREFA_PRIORIDADES.find((p) => p.id === t.prioridade)?.label}
-                        </Badge>
-                      )}
-                      {t.prazo && (
-                        <span className={atrasada ? "font-medium text-destructive" : undefined}>
-                          {formatarPrazo(t.prazo)}
-                        </span>
-                      )}
-                      {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
-                      {t.responsavelNome && (
-                        <span className="flex items-center gap-1">
-                          <User className="size-3" />
-                          {t.responsavelNome}
-                        </span>
-                      )}
-                      {t.checklistTotal > 0 && (
-                        <span className="flex items-center gap-1">
-                          <ListChecks className="size-3" />
-                          {t.checklistFeitos}/{t.checklistTotal}
-                        </span>
-                      )}
-                      {t.comentarios > 0 && (
-                        <span className="flex items-center gap-1">
-                          <MessageSquare className="size-3" />
-                          {t.comentarios}
-                        </span>
-                      )}
-                      {t.anexos > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Paperclip className="size-3" />
-                          {t.anexos}
-                        </span>
-                      )}
-                      {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
-          </section>
-        ))
       )}
+
+      {tarefas.length > 0 &&
+        secoes.map((s) => {
+          const recolhida = !!recolhidas[s.id];
+          const atrasadas = s.id === "concluida" ? 0 : s.itens.filter((t) => t.prazo && t.prazo < hoje).length;
+          const visiveis =
+            s.id === "concluida" && !verTodasConcluidas ? s.itens.slice(0, LIMITE_CONCLUIDAS) : s.itens;
+          return (
+            <section key={s.id} className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => alternarSecao(s.id)}
+                aria-expanded={!recolhida}
+                className="flex items-center gap-2 text-left text-sm font-semibold hover:text-foreground"
+              >
+                {recolhida ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+                {s.titulo}
+                <span className="font-normal text-muted-foreground">({s.itens.length})</span>
+                {atrasadas > 0 && (
+                  <Badge variant="secondary" className="bg-red-100 text-red-700">
+                    {atrasadas} atrasada{atrasadas > 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </button>
+
+              {!recolhida && s.itens.length === 0 && (
+                <p className="pl-6 text-xs text-muted-foreground">{s.vazio}</p>
+              )}
+
+              {!recolhida &&
+                visiveis.map((t) => {
+                  const atrasada = t.status !== "concluida" && !!t.prazo && t.prazo < hoje;
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-start gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40"
+                    >
+                      <Checkbox
+                        className="mt-1"
+                        checked={t.status === "concluida"}
+                        disabled={pending}
+                        onCheckedChange={(v) => mover(t, v ? "concluida" : "a_fazer")}
+                        aria-label="Concluir tarefa"
+                      />
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
+                        onClick={() => setAbertaId(t.id)}
+                      >
+                        <span
+                          className={
+                            t.status === "concluida"
+                              ? "text-sm text-muted-foreground line-through"
+                              : "text-sm font-medium"
+                          }
+                        >
+                          {t.titulo}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {(t.prioridade === "urgente" || t.prioridade === "alta") && (
+                            <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
+                              {TAREFA_PRIORIDADES.find((p) => p.id === t.prioridade)?.label}
+                            </Badge>
+                          )}
+                          {t.prazo && (
+                            <span className={atrasada ? "font-medium text-destructive" : undefined}>
+                              {formatarPrazo(t.prazo)}
+                              {atrasada && " · atrasada"}
+                            </span>
+                          )}
+                          {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
+                          {!pessoal && t.responsavelNome && (
+                            <span className="flex items-center gap-1">
+                              <User className="size-3" />
+                              {t.responsavelNome}
+                            </span>
+                          )}
+                          {t.checklistTotal > 0 && (
+                            <span className="flex items-center gap-1">
+                              <ListChecks className="size-3" />
+                              {t.checklistFeitos}/{t.checklistTotal}
+                            </span>
+                          )}
+                          {t.comentarios > 0 && (
+                            <span className="flex items-center gap-1">
+                              <MessageSquare className="size-3" />
+                              {t.comentarios}
+                            </span>
+                          )}
+                          {t.anexos > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Paperclip className="size-3" />
+                              {t.anexos}
+                            </span>
+                          )}
+                          {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
+                        </span>
+                      </button>
+                      {t.status === "a_fazer" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Iniciar tarefa"
+                          title="Iniciar (mover para Em andamento)"
+                          disabled={pending}
+                          onClick={() => mover(t, "fazendo")}
+                        >
+                          <Play className="size-3.5" />
+                        </Button>
+                      )}
+                      {t.status === "fazendo" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Voltar para pendentes"
+                          title="Voltar para Pendentes"
+                          disabled={pending}
+                          onClick={() => mover(t, "a_fazer")}
+                        >
+                          <Pause className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {!recolhida && s.id === "concluida" && s.itens.length > LIMITE_CONCLUIDAS && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => setVerTodasConcluidas((v) => !v)}
+                >
+                  {verTodasConcluidas ? "Mostrar menos" : `Mostrar todas (${s.itens.length})`}
+                </Button>
+              )}
+            </section>
+          );
+        })}
 
       <Dialog open={criando} onOpenChange={setCriando}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Nova tarefa</DialogTitle>
+            <DialogTitle>{pessoal ? "Nova tarefa pessoal" : "Nova tarefa"}</DialogTitle>
           </DialogHeader>
           <TarefaForm
             membros={membros}
             obras={obras}
             obraFixaId={obraFixaId}
             usuarioId={usuarioId}
+            pessoal={pessoal}
             onCancelar={() => setCriando(false)}
             onSalvo={() => {
               setCriando(false);

@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "./auth";
 import { createClient } from "./supabase/server";
 import { registrarNotificacao } from "./notificacoes";
-import { podeUsarTarefas, responsavelPermitido } from "./recursos";
+import { interpretarPedidoDeTarefa, type RascunhoTarefa } from "./tarefa-ia";
+import { limitarResponsaveis, podeUsarTarefas, responsavelPermitido } from "./recursos";
 import {
   ARQUIVOS_BUCKET,
   addChecklistItem,
@@ -20,6 +21,8 @@ import {
   getTarefa,
   getTarefaAnexo,
   getTarefaDetalhe,
+  listMembrosEquipe,
+  listObras,
   setChecklistItemFeito,
   updateTarefa,
   updateTarefaStatus,
@@ -90,6 +93,8 @@ export type SalvarTarefaInput = {
   responsavelId: string | null;
   prazo: string | null;
   recorrencia: string;
+  pessoal?: boolean; // só na criação; tarefa pessoal só o dono enxerga
+  checklist?: string[]; // só na criação (ex.: vindo da IA)
 };
 
 export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ error?: string; id?: string }> {
@@ -104,12 +109,16 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     return { error: "Para repetir a tarefa, defina um prazo." };
   }
 
+  const atual = input.id ? await getTarefa(input.id) : undefined;
+  if (input.id && !atual) return { error: "Tarefa não encontrada." };
+  const pessoal = atual ? atual.pessoal : Boolean(input.pessoal);
+
   const campos: TarefaCampos = {
-    obraId: input.obraId || null,
+    obraId: pessoal ? null : input.obraId || null,
     titulo,
     descricao: input.descricao.trim(),
     prioridade: input.prioridade as TarefaCampos["prioridade"],
-    responsavelId: responsavelPermitido(input.responsavelId || null, user),
+    responsavelId: pessoal ? user.id : responsavelPermitido(input.responsavelId || null, user),
     prazo,
     recorrencia: input.recorrencia as TarefaRecorrencia,
   };
@@ -119,15 +128,16 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     let responsavelAnterior: string | null = null;
     let obraAnterior: string | null = null;
     if (id) {
-      const atual = await getTarefa(id);
       responsavelAnterior = atual?.responsavelId ?? null;
       obraAnterior = atual?.obraId ?? null;
       await updateTarefa(id, campos);
     } else {
-      id = await createTarefa({ ...campos, criadoPor: user.id });
+      id = await createTarefa({ ...campos, criadoPor: user.id, pessoal });
+      const itens = (input.checklist ?? []).map((i) => i.trim()).filter(Boolean).slice(0, 20);
+      for (let n = 0; n < itens.length; n++) await addChecklistItem(id, itens[n], n);
     }
 
-    if (campos.responsavelId && campos.responsavelId !== user.id && campos.responsavelId !== responsavelAnterior) {
+    if (!pessoal && campos.responsavelId && campos.responsavelId !== user.id && campos.responsavelId !== responsavelAnterior) {
       await registrarNotificacao({
         tipo: "tarefa",
         titulo: "Tarefa para você",
@@ -170,6 +180,7 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
         prazo: proximoPrazo(tarefa.prazo, tarefa.recorrencia),
         recorrencia: tarefa.recorrencia,
         criadoPor: user.id,
+        pessoal: tarefa.pessoal,
       });
       await copiarChecklist(id, proximaId);
     }
@@ -235,7 +246,7 @@ export async function comentarTarefaAction(tarefaId: string, texto: string): Pro
   try {
     await addTarefaComentario(tarefaId, user.id, t);
     const tarefa = await getTarefa(tarefaId);
-    if (tarefa?.responsavelId && tarefa.responsavelId !== user.id) {
+    if (tarefa && !tarefa.pessoal && tarefa.responsavelId && tarefa.responsavelId !== user.id) {
       await registrarNotificacao({
         tipo: "tarefa",
         titulo: "Comentário na sua tarefa",
@@ -306,4 +317,36 @@ export async function excluirAnexoTarefaAction(id: string) {
     await supabase.storage.from(ARQUIVOS_BUCKET).remove([anexo.caminhoArmazenado]);
   }
   revalidatePath("/tarefas");
+}
+
+// --- Criar com IA (texto ou voz transcrita no aparelho) ---
+
+export async function interpretarTarefaIAAction(
+  texto: string,
+  opcoes: { pessoal?: boolean; obraFixaId?: string }
+): Promise<{ rascunho?: RascunhoTarefa; error?: string }> {
+  const user = await exigirEquipe();
+  const pedido = texto.trim();
+  if (pedido.length < 3) return { error: "Descreva a tarefa que você quer criar." };
+  if (pedido.length > 1500) return { error: "O pedido está muito longo. Resuma um pouco." };
+
+  const [obras, membros] = await Promise.all([
+    opcoes.pessoal ? Promise.resolve([]) : listObras(),
+    listMembrosEquipe(),
+  ]);
+  const res = await interpretarPedidoDeTarefa(pedido, {
+    hoje: hojeSP(),
+    obras: obras.map((o) => ({ id: o.id, nome: o.nome })),
+    membros: limitarResponsaveis(membros, user).map((m) => ({ id: m.id, nome: m.nome })),
+    usuario: { id: user.id, nome: user.nome },
+    obraFixaId: opcoes.obraFixaId,
+  });
+  if ("error" in res) return { error: res.error };
+
+  const rascunho = res.rascunho;
+  if (opcoes.pessoal) {
+    rascunho.obraId = null;
+    rascunho.responsavelId = user.id;
+  }
+  return { rascunho };
 }

@@ -246,10 +246,12 @@ export function TarefaDetalheDialog({
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-xs text-muted-foreground">Responsável</dt>
-                <dd>{t.responsavelNome ?? "Sem responsável"}</dd>
-              </div>
+              {!t.pessoal && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Responsável</dt>
+                  <dd>{t.responsavelNome ?? "Sem responsável"}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs text-muted-foreground">Prazo</dt>
                 <dd className={atrasada ? "font-medium text-destructive" : undefined}>
@@ -257,10 +259,12 @@ export function TarefaDetalheDialog({
                   {atrasada && " · atrasada"}
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Obra</dt>
-                <dd>{t.obraNome ?? "Geral"}</dd>
-              </div>
+              {!t.pessoal && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Obra</dt>
+                  <dd>{t.obraNome ?? "Geral"}</dd>
+                </div>
+              )}
             </dl>
 
             {t.descricao && <p className="whitespace-pre-wrap text-sm">{t.descricao}</p>}

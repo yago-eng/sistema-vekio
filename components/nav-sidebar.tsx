@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/actions";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Building2, CheckSquare, LineChart, LogOut, ClipboardList, StickyNote, Receipt, CalendarClock, CalendarHeart, Users, Menu, X, Home } from "lucide-react";
+import { Building2, CheckSquare, LineChart, LogOut, ClipboardList, StickyNote, Receipt, CalendarClock, CalendarHeart, Users, Menu, X, Home, Star } from "lucide-react";
 
 const inicioItem = { href: "/inicio", label: "Início", icon: Home, active: true };
 const tarefasItem = { href: "/tarefas", label: "Tarefas", icon: CheckSquare, active: true };
@@ -68,14 +68,41 @@ function NavLinks({ items, pathname, onNavigate }: { items: NavItem[]; pathname:
   );
 }
 
+function FavoritasLinks({ favoritas, pathname, onNavigate }: { favoritas: { id: string; nome: string }[]; pathname: string; onNavigate?: () => void }) {
+  if (favoritas.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-1 border-t pt-3">
+      <p className="flex items-center gap-1.5 px-3 pb-1 text-xs font-medium text-muted-foreground">
+        <Star className="size-3.5 fill-amber-400 text-amber-500" />
+        Obras favoritas
+      </p>
+      {favoritas.map((f) => (
+        <Link
+          key={f.id}
+          href={`/obras/${f.id}`}
+          onClick={onNavigate}
+          className={cn(
+            "truncate rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted",
+            pathname.startsWith(`/obras/${f.id}`) && "bg-muted font-medium"
+          )}
+        >
+          {f.nome}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export function NavSidebar({
   userName,
   isAdmin,
   mostrarTarefas,
+  favoritas,
 }: {
   userName: string;
   isAdmin: boolean;
   mostrarTarefas: boolean;
+  favoritas: { id: string; nome: string }[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -119,6 +146,7 @@ export function NavSidebar({
             </div>
             <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
               <NavLinks items={items} pathname={pathname} onNavigate={() => setOpen(false)} />
+              <FavoritasLinks favoritas={favoritas} pathname={pathname} onNavigate={() => setOpen(false)} />
             </nav>
             <div className="border-t p-3">
               <p className="truncate px-3 pb-2 text-xs text-muted-foreground">{userName}</p>
@@ -142,8 +170,9 @@ export function NavSidebar({
           </p>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-3">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
           <NavLinks items={items} pathname={pathname} />
+          <FavoritasLinks favoritas={favoritas} pathname={pathname} />
         </nav>
 
         <div className="border-t p-3">

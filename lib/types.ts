@@ -359,6 +359,7 @@ export type Tarefa = {
   prazo: string | null; // YYYY-MM-DD
   recorrencia: TarefaRecorrencia;
   criadoPor: string | null;
+  pessoal: boolean;
   concluidaEm: string | null;
   createdAt: string;
   checklistTotal: number;

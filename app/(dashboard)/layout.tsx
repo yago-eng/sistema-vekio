@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { podeUsarTarefas } from "@/lib/recursos";
+import { podeUsarFavoritas, podeUsarTarefas } from "@/lib/recursos";
+import { listObrasFavoritas } from "@/lib/store";
 import { NavSidebar } from "@/components/nav-sidebar";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,10 +11,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect("/login");
   if (user.role === "cliente") redirect("/portal");
 
+  const favoritas = podeUsarFavoritas(user) ? await listObrasFavoritas(user.id) : [];
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <div className="print:hidden">
-        <NavSidebar userName={user.nome} isAdmin={user.role === "admin"} mostrarTarefas={podeUsarTarefas(user)} />
+        <NavSidebar userName={user.nome} isAdmin={user.role === "admin"} mostrarTarefas={podeUsarTarefas(user)}
+          favoritas={favoritas.map((f) => ({ id: f.id, nome: f.nome }))}
+        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra do topo (desktop): sino de notificações no canto direito. No

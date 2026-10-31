@@ -3,16 +3,23 @@ import { requireUser } from "@/lib/auth";
 import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
 import { listMembrosEquipe, listObras, listTarefas } from "@/lib/store";
 import { TarefasPainel } from "@/components/tarefas-painel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Lock } from "lucide-react";
 
 export default async function TarefasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tarefa?: string }>;
+  searchParams: Promise<{ tarefa?: string; aba?: string }>;
 }) {
   const user = await requireUser();
   if (!podeUsarTarefas(user)) redirect("/inicio");
-  const { tarefa } = await searchParams;
-  const [tarefas, membros, obras] = await Promise.all([listTarefas(), listMembrosEquipe(), listObras()]);
+  const { tarefa, aba } = await searchParams;
+  const [tarefas, pessoais, membros, obras] = await Promise.all([
+    listTarefas(),
+    listTarefas({ pessoal: true }),
+    listMembrosEquipe(),
+    listObras(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -22,14 +29,40 @@ export default async function TarefasPage({
           Tarefas da empresa e das obras, com responsável, prazo, checklist e comentários.
         </p>
       </div>
-      <TarefasPainel
-        tarefas={tarefas}
-        membros={limitarResponsaveis(membros, user)}
-        obras={obras.map((o) => ({ id: o.id, nome: o.nome }))}
-        usuarioId={user.id}
-        isAdmin={user.role === "admin"}
-        abrirId={tarefa}
-      />
+      <Tabs defaultValue={aba === "pessoais" ? "pessoais" : "equipe"} className="flex flex-col gap-4">
+        <TabsList>
+          <TabsTrigger value="equipe">Tarefas</TabsTrigger>
+          <TabsTrigger value="pessoais" className="gap-1.5">
+            <Lock className="size-3.5" />
+            Pessoais
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="equipe">
+          <TarefasPainel
+            tarefas={tarefas}
+            membros={limitarResponsaveis(membros, user)}
+            obras={obras.map((o) => ({ id: o.id, nome: o.nome }))}
+            usuarioId={user.id}
+            isAdmin={user.role === "admin"}
+            abrirId={tarefa}
+          />
+        </TabsContent>
+
+        <TabsContent value="pessoais" className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Sua lista particular: só você vê estas tarefas, nem os administradores.
+          </p>
+          <TarefasPainel
+            tarefas={pessoais}
+            membros={[]}
+            obras={[]}
+            usuarioId={user.id}
+            isAdmin={false}
+            pessoal
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

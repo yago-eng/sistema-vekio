@@ -11,6 +11,9 @@ export function podeUsarTarefas(user: Pick<User, "email" | "role"> | null | unde
   return TAREFAS_EMAILS_LIBERADOS.includes(user.email.trim().toLowerCase());
 }
 
+// Obras favoritas segue a mesma liberação das Tarefas (fase de testes).
+export const podeUsarFavoritas = podeUsarTarefas;
+
 // Enquanto o recurso está restrito, só a própria pessoa pode ser responsável,
 // para ninguém receber aviso de algo que ainda não enxerga.
 export function limitarResponsaveis<T extends { id: string }>(membros: T[], user: Pick<User, "email" | "role"> & { id: string }): T[] {

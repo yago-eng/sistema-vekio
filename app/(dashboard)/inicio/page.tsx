@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { listDatasImportantes, listarObrasRecentes } from "@/lib/store";
+import { listDatasImportantes, listObrasFavoritas, listarObrasRecentes } from "@/lib/store";
+import { podeUsarFavoritas } from "@/lib/recursos";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,6 +15,7 @@ import {
   Users,
   ArrowRight,
   MapPin,
+  Star,
 } from "lucide-react";
 
 const statusObra: Record<string, string> = {
@@ -69,6 +71,7 @@ export default async function InicioPage() {
   const isAdmin = user?.role === "admin";
 
   const obrasRecentes = user ? await listarObrasRecentes(user.id) : [];
+  const favoritas = user && podeUsarFavoritas(user) ? await listObrasFavoritas(user.id) : [];
   const datas = isAdmin ? await listDatasImportantes() : [];
   const hojeIso = new Date().toISOString().slice(0, 10);
   const proximasDatas = datas
@@ -107,6 +110,33 @@ export default async function InicioPage() {
           ))}
         </div>
       </div>
+
+      {favoritas.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+            <Star className="size-4 fill-amber-400 text-amber-500" />
+            Obras favoritas
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {favoritas.map((o) => (
+              <Link key={o.id} href={`/obras/${o.id}`} className="group">
+                <Card className="h-full transition-colors group-hover:border-primary/40 group-hover:bg-primary/5">
+                  <CardContent className="flex flex-col gap-2 pt-6">
+                    <p className="font-medium">{o.nome}</p>
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="size-3" />
+                      {o.regiao}
+                    </p>
+                    <Badge variant="outline" className="w-fit">
+                      {statusObra[o.status] ?? o.status}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {obrasRecentes.length > 0 && (
         <div>

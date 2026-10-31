@@ -9,6 +9,7 @@ import {
   listArquivos,
   listCategorias,
   listMembrosEquipe,
+  listObrasFavoritas,
   listTarefas,
   listEtapas,
   listLancamentos,
@@ -34,7 +35,8 @@ import { EtapaFormDialog } from "@/components/etapa-form-dialog";
 import { GanttChart } from "@/components/gantt-chart";
 import { CronogramaArquivo } from "@/components/cronograma-arquivo";
 import { TarefasPainel } from "@/components/tarefas-painel";
-import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
+import { limitarResponsaveis, podeUsarFavoritas, podeUsarTarefas } from "@/lib/recursos";
+import { FavoritaBotao } from "@/components/favorita-botao";
 import { OrcamentoUploadForm } from "@/components/orcamento-upload-form";
 import { OrcamentoItemFormDialog } from "@/components/orcamento-item-form-dialog";
 import { OrcamentoTable } from "@/components/orcamento-table";
@@ -88,6 +90,10 @@ export default async function ObraDetailPage({
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.role === "admin";
   const mostrarTarefas = podeUsarTarefas(currentUser);
+  const obraEhFavorita =
+    currentUser && podeUsarFavoritas(currentUser)
+      ? (await listObrasFavoritas(currentUser.id)).some((f) => f.id === id)
+      : false;
   if (currentUser) await registrarAcessoObra(currentUser.id, id);
 
   let orcamentos: Awaited<ReturnType<typeof listOrcamentos>> = [];
@@ -155,6 +161,9 @@ export default async function ObraDetailPage({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold">{obra.nome}</h1>
+            {currentUser && podeUsarFavoritas(currentUser) && (
+              <FavoritaBotao obraId={obra.id} favorita={obraEhFavorita} />
+            )}
             {obra.pipelineStatus === "efetivado" && (
               <Badge variant="outline">Veio de orçamento</Badge>
             )}
