@@ -30,6 +30,7 @@ export function TarefaForm({
   membros,
   obras,
   obraFixaId,
+  obraInicialId,
   usuarioId,
   pessoal: pessoalProp,
   rascunho,
@@ -40,6 +41,7 @@ export function TarefaForm({
   membros: MembroEquipe[];
   obras: ObraOpcao[];
   obraFixaId?: string;
+  obraInicialId?: string; // obra pré-selecionada (o campo continua editável)
   usuarioId: string;
   pessoal?: boolean;
   rascunho?: RascunhoTarefa; // sugestão vinda da IA, para o usuário revisar
@@ -49,7 +51,7 @@ export function TarefaForm({
   const pessoal = tarefa ? tarefa.pessoal : Boolean(pessoalProp);
   const [titulo, setTitulo] = useState(tarefa?.titulo ?? rascunho?.titulo ?? "");
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? rascunho?.descricao ?? "");
-  const [obraId, setObraId] = useState(tarefa?.obraId ?? rascunho?.obraId ?? obraFixaId ?? SEM);
+  const [obraId, setObraId] = useState(tarefa?.obraId ?? rascunho?.obraId ?? obraFixaId ?? obraInicialId ?? SEM);
   const [responsavelId, setResponsavelId] = useState(
     tarefa ? (tarefa.responsavelId ?? SEM) : (rascunho?.responsavelId ?? usuarioId)
   );

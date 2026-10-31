@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
-import { listMembrosEquipe, listObras, listTarefas } from "@/lib/store";
+import { listMembrosEquipe, listObras, listObrasFavoritas, listTarefas } from "@/lib/store";
 import { TarefasPainel } from "@/components/tarefas-painel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lock } from "lucide-react";
@@ -14,11 +14,12 @@ export default async function TarefasPage({
   const user = await requireUser();
   if (!podeUsarTarefas(user)) redirect("/inicio");
   const { tarefa, aba } = await searchParams;
-  const [tarefas, pessoais, membros, obras] = await Promise.all([
+  const [tarefas, pessoais, membros, obras, favoritas] = await Promise.all([
     listTarefas(),
     listTarefas({ pessoal: true }),
     listMembrosEquipe(),
     listObras(),
+    listObrasFavoritas(user.id),
   ]);
 
   return (
@@ -45,6 +46,7 @@ export default async function TarefasPage({
             obras={obras.map((o) => ({ id: o.id, nome: o.nome }))}
             usuarioId={user.id}
             isAdmin={user.role === "admin"}
+            favoritas={favoritas.map((f) => ({ id: f.id, nome: f.nome }))}
             abrirId={tarefa}
           />
         </TabsContent>

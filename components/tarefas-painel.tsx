@@ -29,6 +29,7 @@ import {
   Play,
   Plus,
   Repeat,
+  Star,
   Undo2,
   User,
 } from "lucide-react";
@@ -56,6 +57,7 @@ export function TarefasPainel({
   isAdmin,
   obraFixaId,
   pessoal = false,
+  favoritas = [],
   abrirId,
 }: {
   tarefas: Tarefa[];
@@ -65,6 +67,7 @@ export function TarefasPainel({
   isAdmin: boolean;
   obraFixaId?: string;
   pessoal?: boolean;
+  favoritas?: ObraOpcao[];
   abrirId?: string;
 }) {
   const router = useRouter();
@@ -155,6 +158,17 @@ export function TarefasPainel({
     });
   }
 
+  // Clicar numa obra favorita mostra só as tarefas dela, de todas as pessoas.
+  function escolherObraFavorita(id: string) {
+    if (obra === id) {
+      setObra(TODAS);
+      setResponsavel(MINHAS);
+    } else {
+      setObra(id);
+      setResponsavel(TODAS);
+    }
+  }
+
   function soltar(secaoId: TarefaStatus) {
     const t = tarefas.find((x) => x.id === arrastandoId);
     setArrastandoId(null);
@@ -179,11 +193,61 @@ export function TarefasPainel({
       <TarefaIaBarra
         pessoal={pessoal}
         obraFixaId={obraFixaId}
+        obraAtualId={mostrarFiltroObra && obra !== TODAS && obra !== "geral" ? obra : undefined}
         membros={membros}
         obras={obras}
         usuarioId={usuarioId}
         onAbrir={setAbertaId}
       />
+
+      {mostrarFiltroObra && favoritas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+            <Star className="size-4 fill-amber-400 text-amber-500" />
+            Obras favoritas
+          </span>
+          {favoritas.map((f) => {
+            const abertas = tarefas.filter((t) => t.obraId === f.id && t.status !== "concluida").length;
+            const ativa = obra === f.id;
+            return (
+              <Button
+                key={f.id}
+                type="button"
+                size="sm"
+                variant={ativa ? "default" : "outline"}
+                className="gap-2 rounded-full"
+                aria-pressed={ativa}
+                onClick={() => escolherObraFavorita(f.id)}
+              >
+                {f.nome}
+                {abertas > 0 && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-xs",
+                      ativa ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {abertas}
+                  </span>
+                )}
+              </Button>
+            );
+          })}
+          {obra !== TODAS && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setObra(TODAS);
+                setResponsavel(MINHAS);
+              }}
+            >
+              Limpar filtro
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         {mostrarFiltroResponsavel && (
@@ -440,6 +504,7 @@ export function TarefasPainel({
             membros={membros}
             obras={obras}
             obraFixaId={obraFixaId}
+            obraInicialId={mostrarFiltroObra && obra !== TODAS && obra !== "geral" ? obra : undefined}
             usuarioId={usuarioId}
             pessoal={pessoal}
             onCancelar={() => setCriando(false)}
