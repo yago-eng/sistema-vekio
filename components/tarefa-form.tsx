@@ -91,7 +91,6 @@ export function TarefaForm({
           id="tarefa-titulo"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
-          placeholder="Ex: Pedir orçamento do porcelanato"
           required
           autoFocus
         />

@@ -182,11 +182,7 @@ export function TarefaIaBarra({
           }}
           rows={2}
           disabled={pending}
-          placeholder={
-            pessoal
-              ? "Ex.: lembrar de renovar o seguro do carro até dia 20"
-              : "Ex.: crie uma tarefa na obra do Edson para comprar argamassa, me coloque como responsável, prazo até sexta"
-          }
+          placeholder="Descreva a tarefa por texto ou voz..."
           className="min-h-0 flex-1 resize-none"
         />
         <div className="flex flex-col gap-2">
