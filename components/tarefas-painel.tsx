@@ -19,18 +19,20 @@ import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
 import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
 import { COR_PRIORIDADE, TarefaDetalheDialog, formatarPrazo } from "@/components/tarefa-detalhe-dialog";
 import {
+  Check,
   CheckSquare,
   ChevronDown,
   ChevronRight,
   ListChecks,
   MessageSquare,
   Paperclip,
-  Pause,
   Play,
   Plus,
   Repeat,
+  Undo2,
   User,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TAREFA_PRIORIDADES, type MembroEquipe, type Tarefa, type TarefaStatus } from "@/lib/types";
 
 const MINHAS = "minhas";
@@ -66,13 +68,17 @@ export function TarefasPainel({
   abrirId?: string;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [responsavel, setResponsavel] = useState<string>(obraFixaId || pessoal ? TODAS : MINHAS);
   const [obra, setObra] = useState<string>(TODAS);
   const [busca, setBusca] = useState("");
   const [criando, setCriando] = useState(false);
   const [abertaId, setAbertaId] = useState<string | null>(abrirId ?? null);
   const [verTodasConcluidas, setVerTodasConcluidas] = useState(false);
+  // Mudança de fase aparece na hora; o servidor confirma em seguida.
+  const [otimista, setOtimista] = useState<Record<string, TarefaStatus>>({});
+  const [arrastandoId, setArrastandoId] = useState<string | null>(null);
+  const [sobreSecao, setSobreSecao] = useState<string | null>(null);
 
   // Seções recolhidas ficam salvas neste aparelho; "Concluídas" começa recolhida.
   const chaveRecolhidas = `tarefas-recolhidas-${pessoal ? "pessoal" : obraFixaId ? "obra" : "equipe"}`;
@@ -100,7 +106,16 @@ export function TarefasPainel({
 
   const secoes = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    const filtradas = tarefas.filter((t) => {
+    const atuais = tarefas.map((t) =>
+      otimista[t.id] && otimista[t.id] !== t.status
+        ? {
+            ...t,
+            status: otimista[t.id],
+            concluidaEm: otimista[t.id] === "concluida" ? new Date().toISOString() : null,
+          }
+        : t
+    );
+    const filtradas = atuais.filter((t) => {
       if (responsavel === MINHAS && t.responsavelId !== usuarioId) return false;
       if (responsavel === SEM_RESPONSAVEL && t.responsavelId) return false;
       if (responsavel !== MINHAS && responsavel !== TODAS && responsavel !== SEM_RESPONSAVEL && t.responsavelId !== responsavel) {
@@ -124,13 +139,27 @@ export function TarefasPainel({
           );
         }),
     }));
-  }, [tarefas, responsavel, obra, busca, usuarioId]);
+  }, [tarefas, otimista, responsavel, obra, busca, usuarioId]);
 
   function mover(t: Tarefa, status: TarefaStatus) {
+    if (otimista[t.id] ? otimista[t.id] === status : t.status === status) return;
+    setOtimista((o) => ({ ...o, [t.id]: status }));
     startTransition(async () => {
       await mudarStatusTarefaAction(t.id, status);
       router.refresh();
+      setOtimista((o) => {
+        const resto = { ...o };
+        delete resto[t.id];
+        return resto;
+      });
     });
+  }
+
+  function soltar(secaoId: TarefaStatus) {
+    const t = tarefas.find((x) => x.id === arrastandoId);
+    setArrastandoId(null);
+    setSobreSecao(null);
+    if (t) mover(t, secaoId);
   }
 
   const itensResponsavel: Record<string, string> = {
@@ -219,7 +248,22 @@ export function TarefasPainel({
           const visiveis =
             s.id === "concluida" && !verTodasConcluidas ? s.itens.slice(0, LIMITE_CONCLUIDAS) : s.itens;
           return (
-            <section key={s.id} className="flex flex-col gap-2">
+            <section
+              key={s.id}
+              className={cn(
+                "flex flex-col gap-2 rounded-lg transition-colors",
+                arrastandoId && sobreSecao === s.id && "bg-primary/5 ring-2 ring-primary/40 ring-offset-4 ring-offset-background"
+              )}
+              onDragOver={(e) => {
+                if (!arrastandoId) return;
+                e.preventDefault();
+                if (sobreSecao !== s.id) setSobreSecao(s.id);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                soltar(s.id);
+              }}
+            >
               <button
                 type="button"
                 onClick={() => alternarSecao(s.id)}
@@ -246,12 +290,24 @@ export function TarefasPainel({
                   return (
                     <div
                       key={t.id}
-                      className="flex items-start gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", t.id);
+                        setArrastandoId(t.id);
+                      }}
+                      onDragEnd={() => {
+                        setArrastandoId(null);
+                        setSobreSecao(null);
+                      }}
+                      className={cn(
+                        "flex items-start gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40",
+                        arrastandoId === t.id && "opacity-40"
+                      )}
                     >
                       <Checkbox
                         className="mt-1"
                         checked={t.status === "concluida"}
-                        disabled={pending}
                         onCheckedChange={(v) => mover(t, v ? "concluida" : "a_fazer")}
                         aria-label="Concluir tarefa"
                       />
@@ -312,27 +368,48 @@ export function TarefasPainel({
                       {t.status === "a_fazer" && (
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Iniciar tarefa"
-                          title="Iniciar (mover para Em andamento)"
-                          disabled={pending}
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 gap-1.5"
                           onClick={() => mover(t, "fazendo")}
                         >
                           <Play className="size-3.5" />
+                          Iniciar
                         </Button>
                       )}
                       {t.status === "fazendo" && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Voltar para pendentes"
+                            title="Voltar para Pendentes"
+                            onClick={() => mover(t, "a_fazer")}
+                          >
+                            <Undo2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="shrink-0 gap-1.5"
+                            onClick={() => mover(t, "concluida")}
+                          >
+                            <Check className="size-3.5" />
+                            Concluir
+                          </Button>
+                        </>
+                      )}
+                      {t.status === "concluida" && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label="Voltar para pendentes"
-                          title="Voltar para Pendentes"
-                          disabled={pending}
+                          aria-label="Reabrir tarefa"
+                          title="Reabrir (voltar para Pendentes)"
                           onClick={() => mover(t, "a_fazer")}
                         >
-                          <Pause className="size-3.5" />
+                          <Undo2 className="size-3.5" />
                         </Button>
                       )}
                     </div>
