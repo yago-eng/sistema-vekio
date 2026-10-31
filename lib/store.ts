@@ -1719,9 +1719,20 @@ export async function deleteDataImportante(id: string): Promise<void> {
 // --- Tarefas ---
 
 const TAREFA_SELECT =
-  "*, obras(nome), responsavel:profiles!responsavel_id(nome), tarefa_checklist(feito), tarefa_comentarios(id), tarefa_anexos(id)";
+  "*, obras(nome), tarefa_checklist(feito), tarefa_comentarios(id), tarefa_anexos(id)";
 
-function mapTarefa(row: Record<string, unknown>): Tarefa {
+// Nomes dos responsáveis (a tarefa guarda só os ids).
+async function nomesDosResponsaveis(rows: Record<string, unknown>[]): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(rows.flatMap((r) => (r.responsaveis as string[] | null) ?? [])));
+  const nomes = new Map<string, string>();
+  if (ids.length === 0) return nomes;
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("id, nome").in("id", ids);
+  for (const p of data ?? []) nomes.set(p.id as string, (p.nome as string) || "Sem nome");
+  return nomes;
+}
+
+function mapTarefa(row: Record<string, unknown>, nomes: Map<string, string>): Tarefa {
   const checklist = (row.tarefa_checklist as { feito: boolean }[] | null) ?? [];
   return {
     id: row.id as string,
@@ -1731,8 +1742,9 @@ function mapTarefa(row: Record<string, unknown>): Tarefa {
     descricao: (row.descricao as string) ?? "",
     status: row.status as TarefaStatus,
     prioridade: row.prioridade as TarefaPrioridade,
-    responsavelId: (row.responsavel_id as string | null) ?? null,
-    responsavelNome: (row.responsavel as { nome: string } | null)?.nome ?? null,
+    responsaveis: ((row.responsaveis as string[] | null) ?? [])
+      .filter((id) => nomes.has(id))
+      .map((id) => ({ id, nome: nomes.get(id)! })),
     prazo: (row.prazo as string | null) ?? null,
     recorrencia: row.recorrencia as TarefaRecorrencia,
     criadoPor: (row.criado_por as string | null) ?? null,
@@ -1757,13 +1769,14 @@ export async function listTarefas(filtro?: { obraId?: string; pessoal?: boolean 
     .order("created_at", { ascending: false });
   if (filtro?.obraId) query = query.eq("obra_id", filtro.obraId);
   const { data } = await query;
-  return (data ?? []).map(mapTarefa);
+  const nomes = await nomesDosResponsaveis(data ?? []);
+  return (data ?? []).map((row) => mapTarefa(row, nomes));
 }
 
 export async function getTarefa(id: string): Promise<Tarefa | undefined> {
   const supabase = await createClient();
   const { data } = await supabase.from("tarefas").select(TAREFA_SELECT).eq("id", id).maybeSingle();
-  return data ? mapTarefa(data) : undefined;
+  return data ? mapTarefa(data, await nomesDosResponsaveis([data])) : undefined;
 }
 
 export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | undefined> {
@@ -1828,7 +1841,7 @@ export type TarefaCampos = {
   titulo: string;
   descricao: string;
   prioridade: TarefaPrioridade;
-  responsavelId: string | null;
+  responsavelIds: string[];
   prazo: string | null;
   recorrencia: TarefaRecorrencia;
 };
@@ -1844,7 +1857,8 @@ export async function createTarefa(
       titulo: input.titulo,
       descricao: input.descricao,
       prioridade: input.prioridade,
-      responsavel_id: input.responsavelId,
+      responsaveis: input.responsavelIds,
+      responsavel_id: input.responsavelIds[0] ?? null,
       prazo: input.prazo,
       recorrencia: input.recorrencia,
       criado_por: input.criadoPor,
@@ -1865,7 +1879,8 @@ export async function updateTarefa(id: string, campos: TarefaCampos): Promise<vo
       titulo: campos.titulo,
       descricao: campos.descricao,
       prioridade: campos.prioridade,
-      responsavel_id: campos.responsavelId,
+      responsaveis: campos.responsavelIds,
+      responsavel_id: campos.responsavelIds[0] ?? null,
       prazo: campos.prazo,
       recorrencia: campos.recorrencia,
       updated_at: new Date().toISOString(),

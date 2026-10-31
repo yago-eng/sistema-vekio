@@ -248,8 +248,10 @@ export function TarefaDetalheDialog({
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
               {!t.pessoal && (
                 <div>
-                  <dt className="text-xs text-muted-foreground">Responsável</dt>
-                  <dd>{t.responsavelNome ?? "Sem responsável"}</dd>
+                  <dt className="text-xs text-muted-foreground">
+                    {t.responsaveis.length > 1 ? "Responsáveis" : "Responsável"}
+                  </dt>
+                  <dd>{t.responsaveis.length > 0 ? t.responsaveis.map((r) => r.nome).join(", ") : "Sem responsável"}</dd>
                 </div>
               )}
               <div>

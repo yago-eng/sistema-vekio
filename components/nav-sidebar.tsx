@@ -126,7 +126,7 @@ export function NavSidebar({
         <BrandLogo priority className="h-8 w-auto" />
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <NotificationBell />
+          <NotificationBell mostrarAbaTarefas={mostrarTarefas} />
           <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu className="size-5" />
           </Button>

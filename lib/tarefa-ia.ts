@@ -12,7 +12,7 @@ export type RascunhoTarefa = {
   titulo: string;
   descricao: string;
   obraId: string | null;
-  responsavelId: string | null;
+  responsavelIds: string[];
   prazo: string | null;
   prioridade: string;
   recorrencia: string;
@@ -50,7 +50,7 @@ export async function interpretarPedidoDeTarefa(
   const sistema =
     "Você transforma pedidos falados ou escritos em português do Brasil em tarefas de uma construtora/engenharia. " +
     "Sempre responda chamando a ferramenta criar_tarefa.\n\n" +
-    `Quem está pedindo: ${ctx.usuario.nome} (id ${ctx.usuario.id}). Quando o pedido disser "me coloque", "eu", "pra mim" ou não citar ninguém, o responsável é essa pessoa.\n\n` +
+    `Quem está pedindo: ${ctx.usuario.nome} (id ${ctx.usuario.id}). Quando o pedido disser "me coloque", "eu", "pra mim" ou não citar ninguém, o responsável é essa pessoa. A tarefa pode ter mais de um responsável (ex.: "eu e o Antonio"): liste todos em responsavel_ids.\n\n` +
     `Datas (fuso de São Paulo). Use SEMPRE esta tabela para converter "hoje", "amanhã", "sexta", "sexta dessa semana", "dia 15" etc. em AAAA-MM-DD:\n${calendario(ctx.hoje)}\n` +
     '"Sexta dessa semana" é a próxima sexta-feira a partir de hoje (ou hoje, se hoje for sexta). Se não houver prazo no pedido, deixe prazo vazio.\n\n' +
     "Obras disponíveis (use o id exato; escolha a que mais combina com o nome citado, ignorando acentos e maiúsculas; se nenhuma combinar claramente, deixe obra_id vazio):\n" +
@@ -86,7 +86,7 @@ export async function interpretarPedidoDeTarefa(
                 titulo: { type: "string" },
                 descricao: { type: "string" },
                 obra_id: { type: ["string", "null"] },
-                responsavel_id: { type: ["string", "null"] },
+                responsavel_ids: { type: "array", items: { type: "string" }, description: "ids das pessoas responsáveis (uma ou mais)" },
                 prazo: { type: ["string", "null"], description: "AAAA-MM-DD" },
                 prioridade: { type: "string", enum: TAREFA_PRIORIDADES.map((p) => p.id) },
                 recorrencia: { type: "string", enum: TAREFA_RECORRENCIAS.map((r) => r.id) },
@@ -109,8 +109,15 @@ export async function interpretarPedidoDeTarefa(
     }
 
     const obraId = typeof dados.obra_id === "string" && ctx.obras.some((o) => o.id === dados.obra_id) ? dados.obra_id : (ctx.obraFixaId ?? null);
-    const responsavelId =
-      typeof dados.responsavel_id === "string" && ctx.membros.some((m) => m.id === dados.responsavel_id) ? dados.responsavel_id : null;
+    const responsavelIds = Array.isArray(dados.responsavel_ids)
+      ? Array.from(
+          new Set(
+            dados.responsavel_ids.filter(
+              (id): id is string => typeof id === "string" && ctx.membros.some((m) => m.id === id)
+            )
+          )
+        )
+      : [];
     const prazo = typeof dados.prazo === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dados.prazo) ? dados.prazo : null;
     const prioridade = TAREFA_PRIORIDADES.some((p) => p.id === dados.prioridade) ? (dados.prioridade as string) : "normal";
     let recorrencia = TAREFA_RECORRENCIAS.some((r) => r.id === dados.recorrencia) ? (dados.recorrencia as string) : "nenhuma";
@@ -121,7 +128,7 @@ export async function interpretarPedidoDeTarefa(
         titulo: dados.titulo.trim().slice(0, 200),
         descricao: typeof dados.descricao === "string" ? dados.descricao.trim() : "",
         obraId,
-        responsavelId,
+        responsavelIds,
         prazo,
         prioridade,
         recorrencia,

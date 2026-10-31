@@ -90,7 +90,7 @@ export type SalvarTarefaInput = {
   titulo: string;
   descricao: string;
   prioridade: string;
-  responsavelId: string | null;
+  responsavelIds: string[];
   prazo: string | null;
   recorrencia: string;
   pessoal?: boolean; // só na criação; tarefa pessoal só o dono enxerga
@@ -119,21 +119,19 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
     titulo,
     descricao: input.descricao.trim(),
     prioridade: input.prioridade as TarefaCampos["prioridade"],
-    responsavelId: pessoal
-      ? user.id
-      : permitidos.some((m) => m.id === input.responsavelId)
-        ? input.responsavelId
-        : null,
+    responsavelIds: pessoal
+      ? [user.id]
+      : Array.from(new Set(input.responsavelIds)).filter((id) => permitidos.some((m) => m.id === id)),
     prazo,
     recorrencia: input.recorrencia as TarefaRecorrencia,
   };
 
   try {
     let id = input.id;
-    let responsavelAnterior: string | null = null;
+    let responsaveisAnteriores: string[] = [];
     let obraAnterior: string | null = null;
     if (id) {
-      responsavelAnterior = atual?.responsavelId ?? null;
+      responsaveisAnteriores = atual?.responsaveis.map((r) => r.id) ?? [];
       obraAnterior = atual?.obraId ?? null;
       await updateTarefa(id, campos);
     } else {
@@ -142,16 +140,20 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
       for (let n = 0; n < itens.length; n++) await addChecklistItem(id, itens[n], n);
     }
 
-    if (!pessoal && campos.responsavelId && campos.responsavelId !== user.id && campos.responsavelId !== responsavelAnterior) {
-      await registrarNotificacao({
-        tipo: "tarefa",
-        titulo: "Tarefa para você",
-        descricao: `${user.nome} atribuiu a tarefa "${titulo}" a você.`,
-        link: `/tarefas?tarefa=${id}`,
-        atorId: user.id,
-        atorNome: user.nome,
-        destinatarioId: campos.responsavelId,
-      });
+    // Avisa só quem acabou de entrar como responsável (e não é quem está salvando).
+    if (!pessoal) {
+      for (const responsavelId of campos.responsavelIds) {
+        if (responsavelId === user.id || responsaveisAnteriores.includes(responsavelId)) continue;
+        await registrarNotificacao({
+          tipo: "tarefa",
+          titulo: "Tarefa para você",
+          descricao: `${user.nome} atribuiu a tarefa "${titulo}" a você.`,
+          link: `/tarefas?tarefa=${id}`,
+          atorId: user.id,
+          atorNome: user.nome,
+          destinatarioId: responsavelId,
+        });
+      }
     }
 
     atualizarTelas(campos.obraId);
@@ -181,7 +183,7 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
         titulo: tarefa.titulo,
         descricao: tarefa.descricao,
         prioridade: tarefa.prioridade,
-        responsavelId: tarefa.responsavelId,
+        responsavelIds: tarefa.responsaveis.map((r) => r.id),
         prazo: proximoPrazo(tarefa.prazo, tarefa.recorrencia),
         recorrencia: tarefa.recorrencia,
         criadoPor: user.id,
@@ -251,16 +253,19 @@ export async function comentarTarefaAction(tarefaId: string, texto: string): Pro
   try {
     await addTarefaComentario(tarefaId, user.id, t);
     const tarefa = await getTarefa(tarefaId);
-    if (tarefa && !tarefa.pessoal && tarefa.responsavelId && tarefa.responsavelId !== user.id) {
-      await registrarNotificacao({
-        tipo: "tarefa",
-        titulo: "Comentário na sua tarefa",
-        descricao: `${user.nome} comentou em "${tarefa.titulo}": ${t.length > 80 ? `${t.slice(0, 80)}…` : t}`,
-        link: `/tarefas?tarefa=${tarefaId}`,
-        atorId: user.id,
-        atorNome: user.nome,
-        destinatarioId: tarefa.responsavelId,
-      });
+    if (tarefa && !tarefa.pessoal) {
+      for (const responsavel of tarefa.responsaveis) {
+        if (responsavel.id === user.id) continue;
+        await registrarNotificacao({
+          tipo: "tarefa",
+          titulo: "Comentário na sua tarefa",
+          descricao: `${user.nome} comentou em "${tarefa.titulo}": ${t.length > 80 ? `${t.slice(0, 80)}…` : t}`,
+          link: `/tarefas?tarefa=${tarefaId}`,
+          atorId: user.id,
+          atorNome: user.nome,
+          destinatarioId: responsavel.id,
+        });
+      }
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não foi possível comentar." };
@@ -351,7 +356,7 @@ export async function interpretarTarefaIAAction(
   const rascunho = res.rascunho;
   if (opcoes.pessoal) {
     rascunho.obraId = null;
-    rascunho.responsavelId = user.id;
+    rascunho.responsavelIds = [user.id];
   }
   return { rascunho };
 }

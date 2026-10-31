@@ -260,14 +260,17 @@ export async function listarNotificacoes(
     }
   }
 
-  // Tarefas da própria pessoa que vencem hoje ou estão atrasadas.
+  // Tarefas da própria pessoa que vencem amanhã, vencem hoje ou estão atrasadas.
+  const amanha = new Date(`${hoje}T12:00:00Z`);
+  amanha.setUTCDate(amanha.getUTCDate() + 1);
+  const amanhaIso = amanha.toISOString().slice(0, 10);
   const { data: minhasTarefas } = podeUsarTarefas(user)
     ? await supabase
         .from("tarefas")
         .select("id, titulo, prazo, obra_id, obras(nome)")
-        .eq("responsavel_id", user.id)
+        .contains("responsaveis", [user.id])
         .neq("status", "concluida")
-        .lte("prazo", hoje)
+        .lte("prazo", amanhaIso)
     : { data: [] };
   for (const t of (minhasTarefas ?? []) as unknown as {
     id: string;
@@ -276,10 +279,15 @@ export async function listarNotificacoes(
     obras: { nome: string } | null;
   }[]) {
     const atrasada = t.prazo < hoje;
+    const paraAmanha = t.prazo > hoje;
     avisos.push({
-      id: `calc:tarefa:${t.id}:${atrasada ? "atrasada" : hoje}`,
+      id: `calc:tarefa:${t.id}:${atrasada ? "atrasada" : paraAmanha ? `amanha:${hoje}` : hoje}`,
       tipo: "tarefa",
-      titulo: atrasada ? `Tarefa atrasada: ${t.titulo}` : `Hoje vence a tarefa: ${t.titulo}`,
+      titulo: atrasada
+        ? `Tarefa atrasada: ${t.titulo}`
+        : paraAmanha
+          ? `Amanhã vence a tarefa: ${t.titulo}`
+          : `Hoje vence a tarefa: ${t.titulo}`,
       descricao: atrasada
         ? `Prazo era ${t.prazo.split("-").reverse().join("/")}${t.obras ? ` · ${t.obras.nome}` : ""}`
         : (t.obras?.nome ?? "Tarefa da empresa"),

@@ -56,13 +56,13 @@ function diaDe(iso: string) {
   return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
 
-export function NotificationBell() {
+export function NotificationBell({ mostrarAbaTarefas = false }: { mostrarAbaTarefas?: boolean }) {
   const router = useRouter();
   const raiz = useRef<HTMLDivElement>(null);
   const [aberto, setAberto] = useState(false);
   const [itens, setItens] = useState<NotificacaoItem[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
-  const [aba, setAba] = useState<"pendentes" | "historico">("pendentes");
+  const [aba, setAba] = useState<"pendentes" | "tarefas" | "historico">("pendentes");
 
   const carregar = useCallback(async () => {
     // O sino existe duas vezes no HTML (barra do celular e menu do desktop);
@@ -121,7 +121,16 @@ export function NotificationBell() {
     await marcarNotificacoesLidasAction();
   }
 
-  const visiveis = aba === "pendentes" ? itens.filter((i) => !i.lida) : itens;
+  const tarefasNaoLidas = itens.filter((i) => i.tipo === "tarefa" && !i.lida).length;
+  const visiveis =
+    aba === "pendentes"
+      ? itens.filter((i) => !i.lida)
+      : aba === "tarefas"
+        ? itens.filter((i) => i.tipo === "tarefa")
+        : itens;
+  const abas = mostrarAbaTarefas
+    ? (["pendentes", "tarefas", "historico"] as const)
+    : (["pendentes", "historico"] as const);
 
   return (
     <div ref={raiz} className="relative">
@@ -164,7 +173,7 @@ export function NotificationBell() {
           </div>
 
           <div className="flex border-b text-xs font-medium">
-            {(["pendentes", "historico"] as const).map((a) => (
+            {abas.map((a) => (
               <button
                 key={a}
                 type="button"
@@ -176,7 +185,11 @@ export function NotificationBell() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {a === "pendentes" ? `Pendentes${naoLidas > 0 ? ` (${naoLidas})` : ""}` : "Histórico"}
+                {a === "pendentes"
+                  ? `Pendentes${naoLidas > 0 ? ` (${naoLidas})` : ""}`
+                  : a === "tarefas"
+                    ? `Tarefas${tarefasNaoLidas > 0 ? ` (${tarefasNaoLidas})` : ""}`
+                    : "Histórico"}
               </button>
             ))}
           </div>
@@ -186,7 +199,9 @@ export function NotificationBell() {
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                 {aba === "pendentes"
                   ? "Tudo em dia — nenhuma notificação pendente."
-                  : "Nenhuma notificação por enquanto."}
+                  : aba === "tarefas"
+                    ? "Nenhum aviso de tarefa por enquanto."
+                    : "Nenhuma notificação por enquanto."}
               </p>
             ) : (
               visiveis.map((n, idx) => {

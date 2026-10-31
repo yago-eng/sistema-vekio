@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             celular o sino fica na barra do topo do menu. */}
         <div className="sticky top-0 z-30 hidden h-14 items-center justify-end gap-2 bg-background/90 px-8 backdrop-blur-sm md:flex print:hidden">
           <ThemeToggle />
-          <NotificationBell />
+          <NotificationBell mostrarAbaTarefas={podeUsarTarefas(user)} />
         </div>
         <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 md:pt-2 print:p-0">{children}</main>
       </div>

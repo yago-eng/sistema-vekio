@@ -354,8 +354,7 @@ export type Tarefa = {
   descricao: string;
   status: TarefaStatus;
   prioridade: TarefaPrioridade;
-  responsavelId: string | null;
-  responsavelNome: string | null;
+  responsaveis: MembroEquipe[];
   prazo: string | null; // YYYY-MM-DD
   recorrencia: TarefaRecorrencia;
   criadoPor: string | null;

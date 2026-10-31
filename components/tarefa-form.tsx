@@ -52,8 +52,8 @@ export function TarefaForm({
   const [titulo, setTitulo] = useState(tarefa?.titulo ?? rascunho?.titulo ?? "");
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? rascunho?.descricao ?? "");
   const [obraId, setObraId] = useState(tarefa?.obraId ?? rascunho?.obraId ?? obraFixaId ?? obraInicialId ?? SEM);
-  const [responsavelId, setResponsavelId] = useState(
-    tarefa ? (tarefa.responsavelId ?? SEM) : (rascunho?.responsavelId ?? usuarioId)
+  const [responsavelIds, setResponsavelIds] = useState<string[]>(
+    tarefa ? tarefa.responsaveis.map((r) => r.id) : (rascunho?.responsavelIds ?? [usuarioId])
   );
   const [prazo, setPrazo] = useState(tarefa?.prazo ?? rascunho?.prazo ?? "");
   const [prioridade, setPrioridade] = useState<string>(tarefa?.prioridade ?? rascunho?.prioridade ?? "normal");
@@ -71,7 +71,7 @@ export function TarefaForm({
         titulo,
         descricao,
         prioridade,
-        responsavelId: responsavelId === SEM ? null : responsavelId,
+        responsavelIds,
         prazo: prazo || null,
         recorrencia,
         pessoal,
@@ -133,26 +133,34 @@ export function TarefaForm({
         )}
 
         {!pessoal && (
-        <div className="flex flex-col gap-2">
-          <Label>Responsável</Label>
-          <Select
-            value={responsavelId}
-            onValueChange={(v) => setResponsavelId(String(v))}
-            items={{ [SEM]: "Sem responsável", ...Object.fromEntries(membros.map((m) => [m.id, m.nome])) }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SEM}>Sem responsável</SelectItem>
-              {membros.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label>Responsáveis</Label>
+            <div className="flex flex-wrap gap-2">
+              {membros.map((m) => {
+                const ativo = responsavelIds.includes(m.id);
+                return (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    size="sm"
+                    variant={ativo ? "default" : "outline"}
+                    className="rounded-full"
+                    aria-pressed={ativo}
+                    onClick={() =>
+                      setResponsavelIds((atual) =>
+                        ativo ? atual.filter((id) => id !== m.id) : [...atual, m.id]
+                      )
+                    }
+                  >
+                    {m.nome}
+                  </Button>
+                );
+              })}
+            </div>
+            {responsavelIds.length === 0 && (
+              <p className="text-xs text-muted-foreground">Sem responsável. Toque nos nomes para escolher um ou mais.</p>
+            )}
+          </div>
         )}
 
         <div className="flex flex-col gap-2">

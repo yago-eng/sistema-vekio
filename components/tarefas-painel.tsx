@@ -17,12 +17,16 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
 import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
+import { TarefasCalendario } from "@/components/tarefas-calendario";
 import { COR_PRIORIDADE, TarefaDetalheDialog, formatarPrazo } from "@/components/tarefa-detalhe-dialog";
 import {
+  CalendarDays,
   Check,
   CheckSquare,
   ChevronDown,
   ChevronRight,
+  Columns3,
+  List,
   ListChecks,
   MessageSquare,
   Paperclip,
@@ -42,6 +46,13 @@ const SEM_RESPONSAVEL = "sem";
 const LIMITE_CONCLUIDAS = 30;
 
 const PESO_PRIORIDADE: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
+
+type Visao = "lista" | "quadro" | "calendario";
+const VISOES: { id: Visao; label: string; icon: typeof List }[] = [
+  { id: "lista", label: "Lista", icon: List },
+  { id: "quadro", label: "Quadro", icon: Columns3 },
+  { id: "calendario", label: "Calendário", icon: CalendarDays },
+];
 
 const SECOES: { id: TarefaStatus; titulo: string; vazio: string }[] = [
   { id: "concluida", titulo: "Concluídas", vazio: "Nenhuma tarefa concluída." },
@@ -83,6 +94,20 @@ export function TarefasPainel({
   const [arrastandoId, setArrastandoId] = useState<string | null>(null);
   const [sobreSecao, setSobreSecao] = useState<string | null>(null);
 
+  const [visao, setVisao] = useState<Visao>("lista");
+  useEffect(() => {
+    try {
+      const salva = window.localStorage.getItem("tarefas-visao");
+      if (salva === "lista" || salva === "quadro" || salva === "calendario") setVisao(salva);
+    } catch {}
+  }, []);
+  function escolherVisao(v: Visao) {
+    setVisao(v);
+    try {
+      window.localStorage.setItem("tarefas-visao", v);
+    } catch {}
+  }
+
   // Seções recolhidas ficam salvas neste aparelho; "Concluídas" começa recolhida.
   const chaveRecolhidas = `tarefas-recolhidas-${pessoal ? "pessoal" : obraFixaId ? "obra" : "equipe"}`;
   const [recolhidas, setRecolhidas] = useState<Record<string, boolean>>({ concluida: true });
@@ -107,7 +132,7 @@ export function TarefasPainel({
   const mostrarFiltroResponsavel = !pessoal;
   const mostrarFiltroObra = !pessoal && !obraFixaId;
 
-  const secoes = useMemo(() => {
+  const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const atuais = tarefas.map((t) =>
       otimista[t.id] && otimista[t.id] !== t.status
@@ -118,10 +143,11 @@ export function TarefasPainel({
           }
         : t
     );
-    const filtradas = atuais.filter((t) => {
-      if (responsavel === MINHAS && t.responsavelId !== usuarioId) return false;
-      if (responsavel === SEM_RESPONSAVEL && t.responsavelId) return false;
-      if (responsavel !== MINHAS && responsavel !== TODAS && responsavel !== SEM_RESPONSAVEL && t.responsavelId !== responsavel) {
+    return atuais.filter((t) => {
+      const ehResponsavel = (id: string) => t.responsaveis.some((r) => r.id === id);
+      if (responsavel === MINHAS && !ehResponsavel(usuarioId)) return false;
+      if (responsavel === SEM_RESPONSAVEL && t.responsaveis.length > 0) return false;
+      if (responsavel !== MINHAS && responsavel !== TODAS && responsavel !== SEM_RESPONSAVEL && !ehResponsavel(responsavel)) {
         return false;
       }
       if (obra === "geral" && t.obraId) return false;
@@ -129,20 +155,25 @@ export function TarefasPainel({
       if (termo && !`${t.titulo} ${t.descricao}`.toLowerCase().includes(termo)) return false;
       return true;
     });
-    return SECOES.map((s) => ({
-      ...s,
-      itens: filtradas
-        .filter((t) => t.status === s.id)
-        .sort((a, b) => {
-          if (s.id === "concluida") return (b.concluidaEm ?? "").localeCompare(a.concluidaEm ?? "");
-          return (
-            (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") ||
-            PESO_PRIORIDADE[a.prioridade] - PESO_PRIORIDADE[b.prioridade] ||
-            a.titulo.localeCompare(b.titulo)
-          );
-        }),
-    }));
   }, [tarefas, otimista, responsavel, obra, busca, usuarioId]);
+
+  const secoes = useMemo(
+    () =>
+      SECOES.map((s) => ({
+        ...s,
+        itens: filtradas
+          .filter((t) => t.status === s.id)
+          .sort((a, b) => {
+            if (s.id === "concluida") return (b.concluidaEm ?? "").localeCompare(a.concluidaEm ?? "");
+            return (
+              (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") ||
+              PESO_PRIORIDADE[a.prioridade] - PESO_PRIORIDADE[b.prioridade] ||
+              a.titulo.localeCompare(b.titulo)
+            );
+          }),
+      })),
+    [filtradas]
+  );
 
   function mover(t: Tarefa, status: TarefaStatus) {
     if (otimista[t.id] ? otimista[t.id] === status : t.status === status) return;
@@ -187,6 +218,140 @@ export function TarefasPainel({
     geral: "Geral (sem obra)",
     ...Object.fromEntries(obras.map((o) => [o.id, o.nome])),
   };
+
+  function linha(t: Tarefa, compacto = false) {
+    const atrasada = t.status !== "concluida" && !!t.prazo && t.prazo < hoje;
+    return (
+                    <div
+                      key={t.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", t.id);
+                        setArrastandoId(t.id);
+                      }}
+                      onDragEnd={() => {
+                        setArrastandoId(null);
+                        setSobreSecao(null);
+                      }}
+                      className={cn(
+                        "flex items-start gap-3 rounded-lg border bg-background px-3 py-2 hover:bg-muted/40",
+                        compacto && "flex-wrap",
+                        arrastandoId === t.id && "opacity-40"
+                      )}
+                    >
+                      <Checkbox
+                        className="mt-1"
+                        checked={t.status === "concluida"}
+                        onCheckedChange={(v) => mover(t, v ? "concluida" : "a_fazer")}
+                        aria-label="Concluir tarefa"
+                      />
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
+                        onClick={() => setAbertaId(t.id)}
+                      >
+                        <span
+                          className={
+                            t.status === "concluida"
+                              ? "text-sm text-muted-foreground line-through"
+                              : "text-sm font-medium"
+                          }
+                        >
+                          {t.titulo}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {(t.prioridade === "urgente" || t.prioridade === "alta") && (
+                            <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
+                              {TAREFA_PRIORIDADES.find((p) => p.id === t.prioridade)?.label}
+                            </Badge>
+                          )}
+                          {t.prazo && (
+                            <span className={atrasada ? "font-medium text-destructive" : undefined}>
+                              {formatarPrazo(t.prazo)}
+                              {atrasada && " · atrasada"}
+                            </span>
+                          )}
+                          {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
+                          {!pessoal && t.responsaveis.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <User className="size-3" />
+                              {t.responsaveis.map((r) => r.nome).join(", ")}
+                            </span>
+                          )}
+                          {t.checklistTotal > 0 && (
+                            <span className="flex items-center gap-1">
+                              <ListChecks className="size-3" />
+                              {t.checklistFeitos}/{t.checklistTotal}
+                            </span>
+                          )}
+                          {t.comentarios > 0 && (
+                            <span className="flex items-center gap-1">
+                              <MessageSquare className="size-3" />
+                              {t.comentarios}
+                            </span>
+                          )}
+                          {t.anexos > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Paperclip className="size-3" />
+                              {t.anexos}
+                            </span>
+                          )}
+                          {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
+                        </span>
+                      </button>
+                      <div className={cn("flex shrink-0 items-center gap-1", compacto && "w-full justify-end pl-7")}>
+                      {t.status === "a_fazer" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 gap-1.5"
+                          onClick={() => mover(t, "fazendo")}
+                        >
+                          <Play className="size-3.5" />
+                          Iniciar
+                        </Button>
+                      )}
+                      {t.status === "fazendo" && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Voltar para pendentes"
+                            title="Voltar para Pendentes"
+                            onClick={() => mover(t, "a_fazer")}
+                          >
+                            <Undo2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="shrink-0 gap-1.5"
+                            onClick={() => mover(t, "concluida")}
+                          >
+                            <Check className="size-3.5" />
+                            Concluir
+                          </Button>
+                        </>
+                      )}
+                      {t.status === "concluida" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Reabrir tarefa"
+                          title="Reabrir (voltar para Pendentes)"
+                          onClick={() => mover(t, "a_fazer")}
+                        >
+                          <Undo2 className="size-3.5" />
+                        </Button>
+                      )}
+                      </div>
+                    </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -292,7 +457,24 @@ export function TarefasPainel({
           className="w-full sm:w-48"
         />
 
-        <Button type="button" className="gap-2 sm:ml-auto" onClick={() => setCriando(true)}>
+        <div className="flex rounded-md border p-0.5 sm:ml-auto" role="group" aria-label="Forma de visualizar">
+          {VISOES.map((v) => (
+            <Button
+              key={v.id}
+              type="button"
+              size="sm"
+              variant={visao === v.id ? "secondary" : "ghost"}
+              className="gap-1.5"
+              aria-pressed={visao === v.id}
+              onClick={() => escolherVisao(v.id)}
+            >
+              <v.icon className="size-4" />
+              <span className="hidden sm:inline">{v.label}</span>
+            </Button>
+          ))}
+        </div>
+
+        <Button type="button" className="gap-2" onClick={() => setCriando(true)}>
           <Plus className="size-4" />
           Nova tarefa
         </Button>
@@ -306,6 +488,7 @@ export function TarefasPainel({
       )}
 
       {tarefas.length > 0 &&
+        visao === "lista" &&
         secoes.map((s) => {
           const recolhida = !!recolhidas[s.id];
           const atrasadas = s.id === "concluida" ? 0 : s.itens.filter((t) => t.prazo && t.prazo < hoje).length;
@@ -349,136 +532,7 @@ export function TarefasPainel({
               )}
 
               {!recolhida &&
-                visiveis.map((t) => {
-                  const atrasada = t.status !== "concluida" && !!t.prazo && t.prazo < hoje;
-                  return (
-                    <div
-                      key={t.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", t.id);
-                        setArrastandoId(t.id);
-                      }}
-                      onDragEnd={() => {
-                        setArrastandoId(null);
-                        setSobreSecao(null);
-                      }}
-                      className={cn(
-                        "flex items-start gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40",
-                        arrastandoId === t.id && "opacity-40"
-                      )}
-                    >
-                      <Checkbox
-                        className="mt-1"
-                        checked={t.status === "concluida"}
-                        onCheckedChange={(v) => mover(t, v ? "concluida" : "a_fazer")}
-                        aria-label="Concluir tarefa"
-                      />
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-                        onClick={() => setAbertaId(t.id)}
-                      >
-                        <span
-                          className={
-                            t.status === "concluida"
-                              ? "text-sm text-muted-foreground line-through"
-                              : "text-sm font-medium"
-                          }
-                        >
-                          {t.titulo}
-                        </span>
-                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          {(t.prioridade === "urgente" || t.prioridade === "alta") && (
-                            <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
-                              {TAREFA_PRIORIDADES.find((p) => p.id === t.prioridade)?.label}
-                            </Badge>
-                          )}
-                          {t.prazo && (
-                            <span className={atrasada ? "font-medium text-destructive" : undefined}>
-                              {formatarPrazo(t.prazo)}
-                              {atrasada && " · atrasada"}
-                            </span>
-                          )}
-                          {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
-                          {!pessoal && t.responsavelNome && (
-                            <span className="flex items-center gap-1">
-                              <User className="size-3" />
-                              {t.responsavelNome}
-                            </span>
-                          )}
-                          {t.checklistTotal > 0 && (
-                            <span className="flex items-center gap-1">
-                              <ListChecks className="size-3" />
-                              {t.checklistFeitos}/{t.checklistTotal}
-                            </span>
-                          )}
-                          {t.comentarios > 0 && (
-                            <span className="flex items-center gap-1">
-                              <MessageSquare className="size-3" />
-                              {t.comentarios}
-                            </span>
-                          )}
-                          {t.anexos > 0 && (
-                            <span className="flex items-center gap-1">
-                              <Paperclip className="size-3" />
-                              {t.anexos}
-                            </span>
-                          )}
-                          {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
-                        </span>
-                      </button>
-                      {t.status === "a_fazer" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 gap-1.5"
-                          onClick={() => mover(t, "fazendo")}
-                        >
-                          <Play className="size-3.5" />
-                          Iniciar
-                        </Button>
-                      )}
-                      {t.status === "fazendo" && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Voltar para pendentes"
-                            title="Voltar para Pendentes"
-                            onClick={() => mover(t, "a_fazer")}
-                          >
-                            <Undo2 className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="shrink-0 gap-1.5"
-                            onClick={() => mover(t, "concluida")}
-                          >
-                            <Check className="size-3.5" />
-                            Concluir
-                          </Button>
-                        </>
-                      )}
-                      {t.status === "concluida" && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Reabrir tarefa"
-                          title="Reabrir (voltar para Pendentes)"
-                          onClick={() => mover(t, "a_fazer")}
-                        >
-                          <Undo2 className="size-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
+                visiveis.map((t) => linha(t))}
 
               {!recolhida && s.id === "concluida" && s.itens.length > LIMITE_CONCLUIDAS && (
                 <Button
@@ -494,6 +548,53 @@ export function TarefasPainel({
             </section>
           );
         })}
+
+      {tarefas.length > 0 && visao === "quadro" && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {secoes.map((s) => {
+            const itens = s.id === "concluida" && !verTodasConcluidas ? s.itens.slice(0, LIMITE_CONCLUIDAS) : s.itens;
+            return (
+              <section
+                key={s.id}
+                className={cn(
+                  "flex min-h-40 flex-col gap-2 rounded-lg bg-muted/30 p-3 transition-colors",
+                  arrastandoId && sobreSecao === s.id && "bg-primary/5 ring-2 ring-primary/40"
+                )}
+                onDragOver={(e) => {
+                  if (!arrastandoId) return;
+                  e.preventDefault();
+                  if (sobreSecao !== s.id) setSobreSecao(s.id);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  soltar(s.id);
+                }}
+              >
+                <h3 className="text-sm font-semibold">
+                  {s.titulo} <span className="font-normal text-muted-foreground">({s.itens.length})</span>
+                </h3>
+                {s.itens.length === 0 && <p className="text-xs text-muted-foreground">{s.vazio}</p>}
+                {itens.map((t) => linha(t, true))}
+                {s.id === "concluida" && s.itens.length > LIMITE_CONCLUIDAS && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="self-start"
+                    onClick={() => setVerTodasConcluidas((v) => !v)}
+                  >
+                    {verTodasConcluidas ? "Mostrar menos" : `Mostrar todas (${s.itens.length})`}
+                  </Button>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+
+      {tarefas.length > 0 && visao === "calendario" && (
+        <TarefasCalendario tarefas={filtradas} hoje={hoje} onAbrir={setAbertaId} />
+      )}
 
       <Dialog open={criando} onOpenChange={setCriando}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">

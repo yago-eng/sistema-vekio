@@ -32,7 +32,10 @@ function resumo(r: RascunhoTarefa, obras: ObraOpcao[], membros: MembroEquipe[], 
   const obra = obras.find((o) => o.id === r.obraId)?.nome;
   if (obra) partes.push(obra);
   if (!pessoal) {
-    const resp = membros.find((m) => m.id === r.responsavelId)?.nome;
+    const resp = r.responsavelIds
+      .map((id) => membros.find((m) => m.id === id)?.nome)
+      .filter(Boolean)
+      .join(", ");
     if (resp) partes.push(resp);
   }
   if (r.prazo) partes.push(`prazo ${r.prazo.split("-").reverse().join("/")}`);
@@ -150,7 +153,7 @@ export function TarefaIaBarra({
         titulo: r.titulo,
         descricao: r.descricao,
         prioridade: r.prioridade,
-        responsavelId: r.responsavelId ?? (pessoal ? usuarioId : null),
+        responsavelIds: r.responsavelIds.length > 0 ? r.responsavelIds : pessoal ? [usuarioId] : [],
         prazo: r.prazo,
         recorrencia: r.recorrencia,
         pessoal,

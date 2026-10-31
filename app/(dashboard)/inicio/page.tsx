@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { listDatasImportantes, listObrasFavoritas, listarObrasRecentes } from "@/lib/store";
-import { podeUsarFavoritas } from "@/lib/recursos";
+import { listDatasImportantes, listObrasFavoritas, listTarefas, listarObrasRecentes } from "@/lib/store";
+import { podeUsarFavoritas, podeUsarTarefas } from "@/lib/recursos";
+import { MinhasTarefasHoje } from "@/components/minhas-tarefas-hoje";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -71,6 +72,21 @@ export default async function InicioPage() {
   const isAdmin = user?.role === "admin";
 
   const obrasRecentes = user ? await listarObrasRecentes(user.id) : [];
+  const hojeSP = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const tarefasDoDia =
+    user && podeUsarTarefas(user)
+      ? (await listTarefas())
+          .filter(
+            (t) =>
+              t.status !== "concluida" &&
+              t.responsaveis.some((r) => r.id === user.id) &&
+              (t.status === "fazendo" || (!!t.prazo && t.prazo <= hojeSP))
+          )
+          .sort(
+            (a, b) =>
+              (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") || a.titulo.localeCompare(b.titulo)
+          )
+      : null;
   const favoritas = user && podeUsarFavoritas(user) ? await listObrasFavoritas(user.id) : [];
   const datas = isAdmin ? await listDatasImportantes() : [];
   const hojeIso = new Date().toISOString().slice(0, 10);
@@ -88,6 +104,8 @@ export default async function InicioPage() {
         </p>
         <h1 className="mt-1 text-3xl font-semibold">O que vamos fazer hoje?</h1>
       </div>
+
+      {tarefasDoDia && <MinhasTarefasHoje tarefas={tarefasDoDia.slice(0, 8)} hoje={hojeSP} total={tarefasDoDia.length} />}
 
       <div>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Acesso rápido</h2>
