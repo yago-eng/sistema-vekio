@@ -214,7 +214,12 @@ export default async function ObraDetailPage({
         </TabsList>
 
         <TabsContent value="financeiro" className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-4 sm:grid-cols-2",
+              isAdmin && obra.valorAditivos > 0 ? "lg:grid-cols-3" : "lg:grid-cols-4"
+            )}
+          >
             {isAdmin && (
               <>
             <Card>
@@ -242,6 +247,18 @@ export default async function ObraDetailPage({
                 {formatCurrency(obra.valorAditivos)}
               </CardContent>
             </Card>
+            {obra.valorAditivos > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Contrato + aditivos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-semibold">
+                  {formatCurrency(totais.receitaBase + obra.valorAditivos)}
+                </CardContent>
+              </Card>
+            )}
               </>
             )}
             <Card>
