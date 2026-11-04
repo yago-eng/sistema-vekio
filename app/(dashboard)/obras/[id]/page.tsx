@@ -220,11 +220,16 @@ export default async function ObraDetailPage({
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Valor de venda
+                  {totais.receitaPorPagamentos ? "Pagamentos lançados" : "Valor de venda"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-2xl font-semibold">
-                {formatCurrency(obra.valorVenda)}
+                {formatCurrency(totais.receitaBase)}
+                {totais.receitaPorPagamentos && (
+                  <p className="mt-1 text-xs font-normal text-muted-foreground">
+                    obra sem contrato: a receita vem dos pagamentos lançados
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -249,7 +254,7 @@ export default async function ObraDetailPage({
                 {formatCurrency(totais.totalGasto)}
                 {isAdmin && (
                   <p className="mt-1 text-xs font-normal text-muted-foreground">
-                    {totais.percentualUsado.toFixed(1)}% do valor de venda
+                    {totais.percentualUsado.toFixed(1)}% {totais.receitaPorPagamentos ? "dos pagamentos lançados" : "do valor de venda"}
                   </p>
                 )}
               </CardContent>
@@ -269,9 +274,9 @@ export default async function ObraDetailPage({
               >
                 {formatCurrency(totais.margem)}
                 <p className="mt-1 text-xs font-normal text-muted-foreground">
-                  {obra.valorVenda + obra.valorAditivos > 0
-                    ? `${((totais.margem / (obra.valorVenda + obra.valorAditivos)) * 100).toFixed(1)}% de margem sobre o contrato`
-                    : "defina o valor de venda para ver a %"}
+                  {totais.receitaBase + obra.valorAditivos > 0
+                    ? `${((totais.margem / (totais.receitaBase + obra.valorAditivos)) * 100).toFixed(1)}% de margem sobre ${totais.receitaPorPagamentos ? "os pagamentos lançados" : "o contrato"}`
+                    : "defina o valor de venda ou lance pagamentos para ver a %"}
                 </p>
               </CardContent>
             </Card>

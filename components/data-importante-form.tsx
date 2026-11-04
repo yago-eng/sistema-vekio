@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { createDataImportanteAction } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,14 @@ export function DataImportanteForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(createDataImportanteAction, undefined);
 
+  // Caixa controlada por estado: o reset() do formulário não limpa o desenho dela.
+  const [recorrente, setRecorrente] = useState(false);
+
   useEffect(() => {
-    if (state && !state.error) formRef.current?.reset();
+    if (state && !state.error) {
+      formRef.current?.reset();
+      setRecorrente(false);
+    }
   }, [state]);
 
   return (
@@ -44,7 +50,8 @@ export function DataImportanteForm() {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Checkbox id="recorrente" name="recorrente" />
+        <Checkbox id="recorrente" checked={recorrente} onCheckedChange={(v) => setRecorrente(!!v)} />
+        {recorrente && <input type="hidden" name="recorrente" value="on" />}
         <Label htmlFor="recorrente" className="font-normal">
           Recorrente (repete todo ano, ex: aniversário)
         </Label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useRef, useEffect, useState } from "react";
 import { createPagamentoAction } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,15 @@ export function PagamentoForm({ obraId, arquivos }: { obraId: string; arquivos: 
   const action = createPagamentoAction.bind(null, obraId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
+  // A caixa é controlada por estado: o reset() do formulário limpa os campos, mas
+  // não o desenho da caixa, e o lançamento seguinte seria enviado sem "recebido".
+  const [recebido, setRecebido] = useState(false);
+
   useEffect(() => {
-    if (state && !state.error) formRef.current?.reset();
+    if (state && !state.error) {
+      formRef.current?.reset();
+      setRecebido(false);
+    }
   }, [state]);
 
   return (
@@ -67,7 +74,8 @@ export function PagamentoForm({ obraId, arquivos }: { obraId: string; arquivos: 
       </div>
 
       <div className="flex items-center gap-2">
-        <Checkbox id="recebido" name="recebido" />
+        <Checkbox id="recebido" checked={recebido} onCheckedChange={(v) => setRecebido(!!v)} />
+        {recebido && <input type="hidden" name="recebido" value="on" />}
         <Label htmlFor="recebido" className="font-normal">
           Já recebido (dar baixa agora)
         </Label>

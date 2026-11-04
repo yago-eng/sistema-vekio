@@ -128,8 +128,10 @@ export default async function RelatorioObraPage({
       >
         {isAdmin && (
           <div>
-            <p className="text-muted-foreground">Valor de venda</p>
-            <p className="text-base font-semibold">{formatCurrency(obra.valorVenda)}</p>
+            <p className="text-muted-foreground">
+              {totais.receitaPorPagamentos ? "Pagamentos lançados" : "Valor de venda"}
+            </p>
+            <p className="text-base font-semibold">{formatCurrency(totais.receitaBase)}</p>
           </div>
         )}
         <div>
@@ -142,9 +144,10 @@ export default async function RelatorioObraPage({
           <div>
             <p className="text-muted-foreground">Margem</p>
             <p className="text-base font-semibold">{formatCurrency(totais.margem)}</p>
-            {obra.valorVenda + obra.valorAditivos > 0 && (
+            {totais.receitaBase + obra.valorAditivos > 0 && (
               <p className="text-xs text-muted-foreground">
-                {((totais.margem / (obra.valorVenda + obra.valorAditivos)) * 100).toFixed(1)}% do contrato
+                {((totais.margem / (totais.receitaBase + obra.valorAditivos)) * 100).toFixed(1)}%{" "}
+                {totais.receitaPorPagamentos ? "dos pagamentos" : "do contrato"}
               </p>
             )}
           </div>

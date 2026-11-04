@@ -417,20 +417,29 @@ export type ObraTotais = {
   totalGasto: number;
   margem: number;
   percentualUsado: number;
+  // Obra sem valor de venda (ex.: manutenção cobrada por lançamento): a receita
+  // é a soma dos pagamentos lançados na obra.
+  receitaPorPagamentos: boolean;
+  receitaBase: number;
   porCategoria: { categoriaId: string; categoriaNome: string; total: number }[];
 };
 
 export async function getObraTotais(obraId: string): Promise<ObraTotais> {
   const supabase = await createClient();
-  const [{ data: obra }, { data: lancamentos }, { data: categorias }] = await Promise.all([
+  const [{ data: obra }, { data: lancamentos }, { data: categorias }, { data: pagamentos }] = await Promise.all([
     supabase.from("obras").select("valor_venda, valor_aditivos").eq("id", obraId).maybeSingle(),
     supabase.from("lancamentos").select("categoria_id, valor").eq("obra_id", obraId),
     supabase.from("categorias").select("id, nome"),
+    supabase.from("pagamentos").select("valor").eq("obra_id", obraId),
   ]);
 
   const totalGasto = (lancamentos ?? []).reduce((sum, l) => sum + Number(l.valor), 0);
-  const valorVenda = Number(obra?.valor_venda ?? 0);
+  const valorVendaContrato = Number(obra?.valor_venda ?? 0);
   const valorAditivos = Number(obra?.valor_aditivos ?? 0);
+  const receitaPorPagamentos = valorVendaContrato <= 0;
+  const valorVenda = receitaPorPagamentos
+    ? (pagamentos ?? []).reduce((sum, p) => sum + Number(p.valor), 0)
+    : valorVendaContrato;
 
   const porCategoriaMap = new Map<string, number>();
   for (const l of lancamentos ?? []) {
@@ -446,6 +455,8 @@ export async function getObraTotais(obraId: string): Promise<ObraTotais> {
     totalGasto,
     margem: valorVenda + valorAditivos - totalGasto,
     percentualUsado: valorVenda > 0 ? (totalGasto / valorVenda) * 100 : 0,
+    receitaPorPagamentos,
+    receitaBase: valorVenda,
     porCategoria,
   };
 }
@@ -730,7 +741,8 @@ export type FinanceiroAno = {
     obraId: string;
     obraNome: string;
     regiao: Regiao;
-    valorVenda: number;
+    valorVenda: number; // valor de venda do contrato, ou os pagamentos lançados se a obra não tem contrato
+    receitaPorPagamentos: boolean;
     valorAditivos: number;
     totalGasto: number;
     margem: number;
@@ -753,9 +765,21 @@ function computeFinanceiroAno(
   obras: Obra[],
   lancamentos: { obraId: string; categoriaId: string; valor: number; data: string }[],
   categorias: { id: string; nome: string }[],
-  custosFixos: { valor: number }[]
+  custosFixos: { valor: number }[],
+  pagamentos: { obraId: string; valor: number; data: string }[]
 ): FinanceiroAno {
-  const faturamentoTotal = obras.reduce((sum, o) => sum + o.valorVenda, 0);
+  // Obra sem valor de venda (ex.: manutenção cobrada por lançamento) fatura o que
+  // foi lançado em Pagamentos; obra com contrato fatura o valor do contrato.
+  const idsDasObras = new Set(obras.map((o) => o.id));
+  const pagamentosDaObra = new Map<string, number>();
+  for (const p of pagamentos) {
+    if (idsDasObras.has(p.obraId)) pagamentosDaObra.set(p.obraId, (pagamentosDaObra.get(p.obraId) ?? 0) + p.valor);
+  }
+  const receitaPorPagamentos = (o: Obra) => o.valorVenda <= 0;
+  const valorVendaEfetivo = (o: Obra) =>
+    receitaPorPagamentos(o) ? (pagamentosDaObra.get(o.id) ?? 0) : o.valorVenda;
+
+  const faturamentoTotal = obras.reduce((sum, o) => sum + valorVendaEfetivo(o), 0);
   const aditivosTotal = obras.reduce((sum, o) => sum + o.valorAditivos, 0);
   const totalGastoGeral = lancamentos.reduce((sum, l) => sum + l.valor, 0);
   const custoFixoTotal = custosFixos.reduce((sum, c) => sum + c.valor, 0);
@@ -769,13 +793,15 @@ function computeFinanceiroAno(
   const rankingObras = obras
     .map((o) => {
       const totalGasto = gastoPorObra.get(o.id) ?? 0;
-      const receitaTotal = o.valorVenda + o.valorAditivos;
+      const valorVenda = valorVendaEfetivo(o);
+      const receitaTotal = valorVenda + o.valorAditivos;
       const margem = receitaTotal - totalGasto;
       return {
         obraId: o.id,
         obraNome: o.nome,
         regiao: o.regiao,
-        valorVenda: o.valorVenda,
+        valorVenda,
+        receitaPorPagamentos: receitaPorPagamentos(o),
         valorAditivos: o.valorAditivos,
         totalGasto,
         margem,
@@ -799,7 +825,7 @@ function computeFinanceiroAno(
   for (const o of obras) {
     const entry = porRegiaoMap.get(o.regiao)!;
     entry.totalObras += 1;
-    entry.faturamento += o.valorVenda;
+    entry.faturamento += valorVendaEfetivo(o);
     entry.aditivos += o.valorAditivos;
     entry.gasto += gastoPorObra.get(o.id) ?? 0;
   }
@@ -824,7 +850,12 @@ function computeFinanceiroAno(
     return mesesMap.get(mesKey)!;
   };
   for (const o of obras) {
-    ensureMes(o.dataInicio.slice(0, 7)).faturamento += o.valorVenda;
+    if (!receitaPorPagamentos(o)) ensureMes(o.dataInicio.slice(0, 7)).faturamento += o.valorVenda;
+  }
+  // Obras sem contrato: o faturamento entra no mês de cada pagamento lançado.
+  for (const p of pagamentos) {
+    const o = obras.find((x) => x.id === p.obraId);
+    if (o && receitaPorPagamentos(o)) ensureMes(p.data.slice(0, 7)).faturamento += p.valor;
   }
   for (const l of lancamentos) {
     ensureMes(l.data.slice(0, 7)).gasto += l.valor;
@@ -872,11 +903,12 @@ async function fetchAllRows(
 
 export async function getFinanceiroGlobal(): Promise<FinanceiroGlobal> {
   const supabase = await createClient();
-  const [obrasRows, lancamentosRows, categorias, custosRows] = await Promise.all([
+  const [obrasRows, lancamentosRows, categorias, custosRows, pagamentosRows] = await Promise.all([
     fetchAllRows(supabase, "obras", "*"),
     fetchAllRows(supabase, "lancamentos", "obra_id, categoria_id, valor, data"),
     fetchAllRows(supabase, "categorias", "id, nome") as Promise<{ id: string; nome: string }[]>,
     fetchAllRows(supabase, "custos_fixos", "regiao, valor, data_vencimento"),
+    fetchAllRows(supabase, "pagamentos", "obra_id, valor, data_prevista"),
   ]);
 
   const obras = (obrasRows ?? [])
@@ -891,6 +923,9 @@ export async function getFinanceiroGlobal(): Promise<FinanceiroGlobal> {
       valor: Number(l.valor),
       data: l.data as string,
     }));
+  const pagamentos = (pagamentosRows ?? [])
+    .filter((p) => obraIds.has(p.obra_id as string))
+    .map((p) => ({ obraId: p.obra_id as string, valor: Number(p.valor), data: p.data_prevista as string }));
   const custos = (custosRows ?? []).map((c) => ({
     regiao: c.regiao as Regiao,
     valor: Number(c.valor),
@@ -904,14 +939,14 @@ export async function getFinanceiroGlobal(): Promise<FinanceiroGlobal> {
   const todosOsAnos = ["todos", ...anos];
 
   const geral: Record<string, FinanceiroAno> = {
-    todos: computeFinanceiroAno(obras, lancamentos, categoriasList, custos),
+    todos: computeFinanceiroAno(obras, lancamentos, categoriasList, custos, pagamentos),
   };
   for (const ano of anos) {
     const obrasDoAno = obras.filter((o) => o.dataInicio.slice(0, 4) === ano);
     const idsDoAno = new Set(obrasDoAno.map((o) => o.id));
     const lancamentosDoAno = lancamentos.filter((l) => idsDoAno.has(l.obraId));
     const custosDoAno = custos.filter((c) => c.ano === ano);
-    geral[ano] = computeFinanceiroAno(obrasDoAno, lancamentosDoAno, categoriasList, custosDoAno);
+    geral[ano] = computeFinanceiroAno(obrasDoAno, lancamentosDoAno, categoriasList, custosDoAno, pagamentos);
   }
 
   const porRegiaoAno = {} as Record<Regiao, Record<string, FinanceiroAno>>;
@@ -922,14 +957,14 @@ export async function getFinanceiroGlobal(): Promise<FinanceiroGlobal> {
     const custosDaRegiao = custos.filter((c) => c.regiao === regiao);
 
     const porAno: Record<string, FinanceiroAno> = {
-      todos: computeFinanceiroAno(obrasDaRegiao, lancamentosDaRegiao, categoriasList, custosDaRegiao),
+      todos: computeFinanceiroAno(obrasDaRegiao, lancamentosDaRegiao, categoriasList, custosDaRegiao, pagamentos),
     };
     for (const ano of anos) {
       const obrasDoAno = obrasDaRegiao.filter((o) => o.dataInicio.slice(0, 4) === ano);
       const idsDoAno = new Set(obrasDoAno.map((o) => o.id));
       const lancamentosDoAno = lancamentosDaRegiao.filter((l) => idsDoAno.has(l.obraId));
       const custosDoAno = custosDaRegiao.filter((c) => c.ano === ano);
-      porAno[ano] = computeFinanceiroAno(obrasDoAno, lancamentosDoAno, categoriasList, custosDoAno);
+      porAno[ano] = computeFinanceiroAno(obrasDoAno, lancamentosDoAno, categoriasList, custosDoAno, pagamentos);
     }
     porRegiaoAno[regiao] = porAno;
   }

@@ -137,7 +137,14 @@ function FinanceiroAnoView({ dados }: { dados: FinanceiroAno }) {
                       </Link>
                     </TableCell>
                     <TableCell>{r.regiao}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(r.valorVenda)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(r.valorVenda)}
+                      {r.receitaPorPagamentos && (
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          pagamentos lançados
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(r.valorAditivos)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(r.totalGasto)}</TableCell>
                     <TableCell
