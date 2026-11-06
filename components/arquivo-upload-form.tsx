@@ -67,6 +67,29 @@ export function ArquivoUploadForm({ obraId }: { obraId: string }) {
         // Cronograma em imagem fica como veio — comprimir deixaria o texto ilegível.
         if (categoria !== "cronograma") file = await comprimirImagemSeNecessario(file);
 
+        // No iPhone, um arquivo do iCloud/app Arquivos que ainda não foi baixado aparece
+        // com o tamanho certo, mas é enviado sem conteúdo ("No content provided").
+        // Ler os bytes aqui obriga o aparelho a baixá-lo e confirma que está inteiro.
+        if (file.size <= 200 * 1024 * 1024) {
+          let bytes: ArrayBuffer;
+          try {
+            bytes = await file.arrayBuffer();
+          } catch {
+            throw new Error(
+              `Não consegui ler "${file.name}". Se ele está no iCloud, abra o app Arquivos, toque nele para baixar no aparelho e tente de novo.`
+            );
+          }
+          if (bytes.byteLength === 0 || bytes.byteLength !== file.size) {
+            throw new Error(
+              `"${file.name}" ainda não foi baixado no aparelho. Abra o app Arquivos, toque nele para baixar e tente de novo.`
+            );
+          }
+          file = new File([bytes], file.name, {
+            type: file.type || "application/octet-stream",
+            lastModified: file.lastModified,
+          });
+        }
+
         const assinado = await comLimite(criarUploadAssinadoAction(obraId, file.name));
         if (!assinado.ok) throw new Error(assinado.error);
 
