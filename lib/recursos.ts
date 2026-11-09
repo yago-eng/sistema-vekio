@@ -21,6 +21,16 @@ export function podeUsarTarefas(user: Pick<User, "email" | "role"> | null | unde
   return TAREFAS_LIBERADO_PARA_TODOS || emailLiberado(user.email);
 }
 
+// Assistente de IA (chat que consulta e executa ações): fase de testes, só estas contas.
+// Para liberar para toda a equipe, troque ASSISTENTE_LIBERADO_PARA_TODOS para true.
+const ASSISTENTE_LIBERADO_PARA_TODOS = false;
+const ASSISTENTE_EMAILS_LIBERADOS = ["yagosmo@gmail.com", "yago@vekio.co", "antonio@vekio.co"];
+
+export function podeUsarAssistente(user: Pick<User, "email" | "role"> | null | undefined): boolean {
+  if (!user || user.role === "cliente") return false;
+  return ASSISTENTE_LIBERADO_PARA_TODOS || ASSISTENTE_EMAILS_LIBERADOS.includes(user.email.trim().toLowerCase());
+}
+
 // Obras favoritas segue a mesma liberação das Tarefas (fase de testes).
 export const podeUsarFavoritas = podeUsarTarefas;
 

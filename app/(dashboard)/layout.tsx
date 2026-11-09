@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { podeUsarFavoritas, podeUsarTarefas } from "@/lib/recursos";
+import { podeUsarAssistente, podeUsarFavoritas, podeUsarTarefas } from "@/lib/recursos";
 import { listObrasFavoritas } from "@/lib/store";
+import { AssistenteChat } from "@/components/assistente-chat";
 import { NavSidebar } from "@/components/nav-sidebar";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -29,6 +30,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
         <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 md:pt-2 print:p-0">{children}</main>
       </div>
+      {podeUsarAssistente(user) && (
+        <AssistenteChat ehAdmin={user.role === "admin"} podeTarefas={podeUsarTarefas(user)} />
+      )}
     </div>
   );
 }

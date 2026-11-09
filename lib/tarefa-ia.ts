@@ -27,7 +27,7 @@ export type ContextoIA = {
   obraFixaId?: string;
 };
 
-function calendario(hoje: string): string {
+export function calendario(hoje: string): string {
   const base = new Date(`${hoje}T12:00:00Z`);
   const linhas: string[] = [];
   for (let i = 0; i < 21; i++) {
