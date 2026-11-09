@@ -35,7 +35,7 @@ export function IconeStatus({ status, className }: { status: TarefaStatus; class
 // --- Responsáveis: bolinhas com a inicial ---
 
 const CORES_AVATAR = [
-  "bg-red-500",
+  "bg-orange-500",
   "bg-violet-500",
   "bg-sky-500",
   "bg-emerald-500",
@@ -45,10 +45,27 @@ const CORES_AVATAR = [
   "bg-indigo-500",
 ];
 
-function corDe(id: string) {
+// Cada pessoa tem sempre a mesma cor, para qualquer um que olhe. Quem não está na lista
+// recebe uma cor da paleta, estável por pessoa (sem vermelho, branco nem preto).
+const CORES_FIXAS: Record<string, string> = {
+  yago: "bg-red-500 text-white",
+  antonio: "bg-white text-black border border-slate-300 dark:border-slate-500",
+  david: "bg-black text-red-500 border border-slate-500",
+};
+
+function primeiroNome(nome: string) {
+  return (nome.trim().split(/\s+/)[0] ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function estiloAvatar(m: MembroEquipe) {
+  const fixa = CORES_FIXAS[primeiroNome(m.nome)];
+  if (fixa) return fixa;
   let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return CORES_AVATAR[h % CORES_AVATAR.length];
+  for (const c of m.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `${CORES_AVATAR[h % CORES_AVATAR.length]} text-white`;
 }
 
 export function Avatares({ responsaveis, max = 3 }: { responsaveis: MembroEquipe[]; max?: number }) {
@@ -61,8 +78,8 @@ export function Avatares({ responsaveis, max = 3 }: { responsaveis: MembroEquipe
         <span
           key={r.id}
           className={cn(
-            "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold text-white ring-2 ring-background",
-            corDe(r.id)
+            "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold ring-2 ring-background",
+            estiloAvatar(r)
           )}
         >
           {(r.nome.trim()[0] ?? "?").toUpperCase()}
@@ -120,10 +137,7 @@ export function ResponsaveisRapido({
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
             >
               <span
-                className={cn(
-                  "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold text-white",
-                  corDe(m.id)
-                )}
+                className={cn("flex size-6 items-center justify-center rounded-full text-[11px] font-semibold", estiloAvatar(m))}
               >
                 {(m.nome.trim()[0] ?? "?").toUpperCase()}
               </span>

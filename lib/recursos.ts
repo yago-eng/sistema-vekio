@@ -23,7 +23,7 @@ export function podeUsarTarefas(user: Pick<User, "email" | "role"> | null | unde
 
 // Assistente de IA (chat que consulta e executa ações): fase de testes, só estas contas.
 // Para liberar para toda a equipe, troque ASSISTENTE_LIBERADO_PARA_TODOS para true.
-const ASSISTENTE_LIBERADO_PARA_TODOS = false;
+const ASSISTENTE_LIBERADO_PARA_TODOS = true;
 const ASSISTENTE_EMAILS_LIBERADOS = ["yagosmo@gmail.com", "yago@vekio.co", "antonio@vekio.co"];
 
 export function podeUsarAssistente(user: Pick<User, "email" | "role"> | null | undefined): boolean {
