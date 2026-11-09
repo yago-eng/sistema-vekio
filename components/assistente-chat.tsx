@@ -178,7 +178,16 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
             <RotateCcw className="size-4" />
           </Button>
         )}
-        <Button type="button" variant="ghost" size="icon" onClick={() => setAberto(false)} aria-label="Fechar">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            voz.parar();
+            setAberto(false);
+          }}
+          aria-label="Fechar"
+        >
           <X className="size-4" />
         </Button>
       </div>
