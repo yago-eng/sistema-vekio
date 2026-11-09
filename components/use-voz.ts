@@ -11,6 +11,9 @@ type Reconhecimento = {
   continuous: boolean;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
+  onstart?: (() => void) | null;
+  onaudiostart?: (() => void) | null;
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -20,6 +23,8 @@ type ConstrutorReconhecimento = new () => Reconhecimento;
 const ESPERA_PARA_RELIGAR_MS = 250;
 const TENTATIVAS_DE_RELIGAR = 3;
 const SESSOES_SEM_FALA_PARA_DESISTIR = 3;
+const ESPERA_PELO_FIM_MS = 800; // depois de "parar", quanto esperar o navegador avisar que acabou
+const ESPERA_PELO_INICIO_MS = 2500; // ao religar, quanto esperar o microfone realmente abrir
 
 function construtor(): ConstrutorReconhecimento | undefined {
   if (typeof window === "undefined") return undefined;
@@ -40,6 +45,8 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
   const ultimoRef = useRef<string | null>(null); // último texto ditado (a tela pode demorar a refletir)
   const semFalaRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vigiaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textoRef = useRef(textoAtual);
   const mudarRef = useRef(aoMudar);
 
@@ -53,6 +60,8 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
     return () => {
       querRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (fimTimerRef.current) clearTimeout(fimTimerRef.current);
+      if (vigiaRef.current) clearTimeout(vigiaRef.current);
       recRef.current?.stop();
     };
   }, []);
@@ -63,7 +72,26 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
     setOuvindo(false);
   }
 
-  function iniciarSessao() {
+  // Solta a sessão anterior sem esperar o navegador avisar que ela acabou. No iPhone esse aviso
+  // às vezes nunca chega, e o microfone parecia "ocupado" até fechar o app.
+  function descartarSessao() {
+    const rec = recRef.current;
+    if (rec) {
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      rec.onstart = null;
+      rec.onaudiostart = null;
+      try {
+        if (rec.abort) rec.abort();
+        else rec.stop();
+      } catch {}
+    }
+    recRef.current = null;
+    ativaRef.current = false;
+  }
+
+  function iniciarSessao(aoReligar = false) {
     const Construtor = construtor();
     if (!Construtor) return;
     // Ao religar depois de uma pausa, parte do que já foi ditado (e não do que a tela mostra,
@@ -71,12 +99,20 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
     const base = (ultimoRef.current ?? textoRef.current()).trim();
     const prefixo = base ? `${base} ` : "";
     let ouviuFala = false;
+    let abriu = false;
 
     const rec = new Construtor();
     rec.lang = "pt-BR";
     rec.interimResults = true;
     rec.continuous = false;
+    rec.onstart = () => {
+      abriu = true;
+    };
+    rec.onaudiostart = () => {
+      abriu = true;
+    };
     rec.onresult = (e) => {
+      abriu = true;
       const falado = Array.from(e.results)
         .map((r) => r[0]?.transcript ?? "")
         .join(" ")
@@ -101,6 +137,7 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
       }
     };
     rec.onend = () => {
+      if (recRef.current !== rec) return; // sessão já descartada
       ativaRef.current = false;
       if (!querRef.current) {
         setOuvindo(false);
@@ -118,6 +155,18 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
     recRef.current = rec;
     rec.start();
     ativaRef.current = true;
+
+    // Religar sem um toque da pessoa pode ser bloqueado (iPhone): em vez de ficar "ouvindo"
+    // sem ouvir nada, avisa para tocar no microfone de novo.
+    if (aoReligar) {
+      if (vigiaRef.current) clearTimeout(vigiaRef.current);
+      vigiaRef.current = setTimeout(() => {
+        if (!abriu && recRef.current === rec && querRef.current) {
+          descartarSessao();
+          desistir("O navegador parou de ouvir. Toque no microfone para continuar.");
+        }
+      }, ESPERA_PELO_INICIO_MS);
+    }
   }
 
   // Pausa na fala: o navegador encerrou a sessão, então abre outra, com uma pequena espera
@@ -130,7 +179,7 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
         return;
       }
       try {
-        iniciarSessao();
+        iniciarSessao(true);
       } catch {
         if (tentativa + 1 < TENTATIVAS_DE_RELIGAR) religar(tentativa + 1);
         else desistir("O microfone não respondeu. Toque nele para tentar de novo.");
@@ -141,8 +190,17 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
   function parar() {
     querRef.current = false;
     if (timerRef.current) clearTimeout(timerRef.current);
-    recRef.current?.stop();
+    if (vigiaRef.current) clearTimeout(vigiaRef.current);
+    const rec = recRef.current;
+    rec?.stop();
     setOuvindo(false);
+    // Se o navegador não avisar que terminou, solta a sessão para o próximo uso funcionar.
+    if (rec) {
+      if (fimTimerRef.current) clearTimeout(fimTimerRef.current);
+      fimTimerRef.current = setTimeout(() => {
+        if (recRef.current === rec) descartarSessao();
+      }, ESPERA_PELO_FIM_MS);
+    }
   }
 
   function alternar() {
@@ -156,8 +214,9 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
     semFalaRef.current = 0;
     ultimoRef.current = null;
     setOuvindo(true);
-    // A sessão anterior ainda está encerrando: o fim dela já religa, pois a pessoa quer ouvir.
-    if (ativaRef.current) return;
+    // Se a sessão anterior ainda não avisou que acabou, solta ela e começa uma nova.
+    if (fimTimerRef.current) clearTimeout(fimTimerRef.current);
+    if (ativaRef.current) descartarSessao();
     try {
       iniciarSessao();
     } catch {
