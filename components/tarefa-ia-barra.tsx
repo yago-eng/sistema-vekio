@@ -1,29 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { interpretarTarefaIAAction, salvarTarefaAction } from "@/lib/tarefa-actions";
 import type { RascunhoTarefa } from "@/lib/tarefa-ia";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useVoz } from "@/components/use-voz";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
 import { Loader2, Mic, Sparkles, Square } from "lucide-react";
 import type { MembroEquipe } from "@/lib/types";
-
-// A voz é transcrita no próprio aparelho (Chrome, Edge, Safari); só o texto vai para a IA.
-type Reconhecimento = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onend: (() => void) | null;
-};
-type ConstrutorReconhecimento = new () => Reconhecimento;
 
 const CHAVE_DIRETO = "tarefa-ia-direto";
 
@@ -63,26 +51,17 @@ export function TarefaIaBarra({
 }) {
   const router = useRouter();
   const [texto, setTexto] = useState("");
-  const [ouvindo, setOuvindo] = useState(false);
-  const [temVoz, setTemVoz] = useState(false);
   const [direto, setDireto] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [criada, setCriada] = useState<{ id: string; titulo: string; detalhe: string } | null>(null);
   const [rascunho, setRascunho] = useState<RascunhoTarefa | null>(null);
   const [pending, startTransition] = useTransition();
-  const recRef = useRef<Reconhecimento | null>(null);
-  const baseRef = useRef("");
+  const voz = useVoz(() => texto, setTexto);
 
   useEffect(() => {
-    const w = window as unknown as {
-      SpeechRecognition?: ConstrutorReconhecimento;
-      webkitSpeechRecognition?: ConstrutorReconhecimento;
-    };
-    setTemVoz(Boolean(w.SpeechRecognition ?? w.webkitSpeechRecognition));
     try {
       setDireto(window.localStorage.getItem(CHAVE_DIRETO) === "1");
     } catch {}
-    return () => recRef.current?.stop();
   }, []);
 
   function alternarDireto(valor: boolean) {
@@ -92,51 +71,9 @@ export function TarefaIaBarra({
     } catch {}
   }
 
-  function alternarMic() {
-    if (ouvindo) {
-      recRef.current?.stop();
-      return;
-    }
-    const w = window as unknown as {
-      SpeechRecognition?: ConstrutorReconhecimento;
-      webkitSpeechRecognition?: ConstrutorReconhecimento;
-    };
-    const Construtor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Construtor) return;
-    setErro(null);
-    setCriada(null);
-    baseRef.current = texto.trim() ? `${texto.trim()} ` : "";
-    const rec = new Construtor();
-    rec.lang = "pt-BR";
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const falado = Array.from(e.results)
-        .map((r) => r[0]?.transcript ?? "")
-        .join(" ")
-        .trim();
-      setTexto(baseRef.current + falado);
-    };
-    rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        setErro("Permita o uso do microfone no navegador para falar a tarefa.");
-      } else if (e.error !== "no-speech" && e.error !== "aborted") {
-        setErro("Não consegui ouvir. Tente de novo ou digite o pedido.");
-      }
-    };
-    rec.onend = () => setOuvindo(false);
-    recRef.current = rec;
-    setOuvindo(true);
-    try {
-      rec.start();
-    } catch {
-      setOuvindo(false);
-    }
-  }
-
   function enviar() {
     if (!texto.trim() || pending) return;
-    recRef.current?.stop();
+    voz.parar();
     setErro(null);
     setCriada(null);
     startTransition(async () => {
@@ -194,17 +131,17 @@ export function TarefaIaBarra({
           className="min-h-0 flex-1 resize-none"
         />
         <div className="flex flex-col gap-2">
-          {temVoz && (
+          {voz.temVoz && (
             <Button
               type="button"
-              variant={ouvindo ? "destructive" : "outline"}
+              variant={voz.ouvindo ? "destructive" : "outline"}
               size="icon"
-              onClick={alternarMic}
+              onClick={voz.alternar}
               disabled={pending}
-              aria-label={ouvindo ? "Parar de ouvir" : "Falar a tarefa"}
-              title={ouvindo ? "Parar" : "Falar a tarefa"}
+              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar a tarefa"}
+              title={voz.ouvindo ? "Parar" : "Falar a tarefa"}
             >
-              {ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
+              {voz.ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
             </Button>
           )}
           <Button type="button" size="icon" onClick={enviar} disabled={pending || !texto.trim()} aria-label="Criar tarefa">
@@ -218,11 +155,11 @@ export function TarefaIaBarra({
           <Checkbox checked={direto} onCheckedChange={(v) => alternarDireto(!!v)} />
           Criar direto, sem revisar
         </label>
-        {ouvindo && <span className="text-destructive">Ouvindo... fale a tarefa.</span>}
-        {!temVoz && <span>Para falar em vez de digitar, use o microfone do teclado do celular.</span>}
+        {voz.ouvindo && <span className="text-destructive">Ouvindo... fale a tarefa e toque em parar quando terminar.</span>}
+        {!voz.temVoz && <span>Para falar em vez de digitar, use o microfone do teclado do celular.</span>}
       </div>
 
-      {erro && <p className="text-sm text-destructive">{erro}</p>}
+      {(erro ?? voz.erro) && <p className="text-sm text-destructive">{erro ?? voz.erro}</p>}
 
       {criada && (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-background px-3 py-2 text-sm">

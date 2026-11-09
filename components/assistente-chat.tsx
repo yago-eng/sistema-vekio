@@ -7,24 +7,12 @@ import { executarAcaoAssistenteAction } from "@/lib/assistente-actions";
 import type { AcaoProposta } from "@/lib/assistente";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useVoz } from "@/components/use-voz";
 import { ArrowUp, Check, Loader2, Mic, RotateCcw, Sparkles, Square, X } from "lucide-react";
 
 type EstadoAcao = "pendente" | "executando" | "feita" | "cancelada" | "erro";
 type AcaoUI = AcaoProposta & { estado: EstadoAcao; resultado?: string; link?: string };
 type Msg = { id: string; role: "user" | "assistant"; texto: string; acoes?: AcaoUI[]; falha?: boolean };
-
-// A voz é transcrita no próprio aparelho (Chrome, Edge, Safari); só o texto vai para a IA.
-type Reconhecimento = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onend: (() => void) | null;
-};
-type ConstrutorReconhecimento = new () => Reconhecimento;
 
 const CHAVE = "assistente-chat-v1";
 
@@ -59,12 +47,8 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
   const [entrada, setEntrada] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [carregado, setCarregado] = useState(false);
-  const [ouvindo, setOuvindo] = useState(false);
-  const [temVoz, setTemVoz] = useState(false);
-  const [erroVoz, setErroVoz] = useState<string | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
-  const recRef = useRef<Reconhecimento | null>(null);
-  const baseRef = useRef("");
+  const voz = useVoz(() => entrada, setEntrada);
 
   // Recupera a conversa se a página for recarregada (some ao fechar a aba).
   useEffect(() => {
@@ -82,10 +66,7 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
         );
       }
     } catch {}
-    const w = window as unknown as { SpeechRecognition?: ConstrutorReconhecimento; webkitSpeechRecognition?: ConstrutorReconhecimento };
-    setTemVoz(Boolean(w.SpeechRecognition ?? w.webkitSpeechRecognition));
     setCarregado(true);
-    return () => recRef.current?.stop();
   }, []);
 
   useEffect(() => {
@@ -99,49 +80,10 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
     if (aberto) fimRef.current?.scrollIntoView({ block: "end" });
   }, [msgs, carregando, aberto]);
 
-  function alternarMic() {
-    if (ouvindo) {
-      recRef.current?.stop();
-      return;
-    }
-    const w = window as unknown as { SpeechRecognition?: ConstrutorReconhecimento; webkitSpeechRecognition?: ConstrutorReconhecimento };
-    const Construtor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Construtor) return;
-    setErroVoz(null);
-    baseRef.current = entrada.trim() ? `${entrada.trim()} ` : "";
-    const rec = new Construtor();
-    rec.lang = "pt-BR";
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const falado = Array.from(e.results)
-        .map((r) => r[0]?.transcript ?? "")
-        .join(" ")
-        .trim();
-      setEntrada(baseRef.current + falado);
-    };
-    rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        setErroVoz("Permita o uso do microfone no navegador para falar.");
-      } else if (e.error !== "no-speech" && e.error !== "aborted") {
-        setErroVoz("Não consegui ouvir. Tente de novo ou digite.");
-      }
-    };
-    rec.onend = () => setOuvindo(false);
-    recRef.current = rec;
-    setOuvindo(true);
-    try {
-      rec.start();
-    } catch {
-      setOuvindo(false);
-    }
-  }
-
   async function enviar(textoDireto?: string) {
     const texto = (textoDireto ?? entrada).trim();
     if (!texto || carregando) return;
-    recRef.current?.stop();
-    setErroVoz(null);
+    voz.parar();
     const lista: Msg[] = [...msgs, { id: novoId(), role: "user", texto }];
     setMsgs(lista);
     setEntrada("");
@@ -197,10 +139,9 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
   }
 
   function limpar() {
-    recRef.current?.stop();
+    voz.parar();
     setMsgs([]);
     setEntrada("");
-    setErroVoz(null);
   }
 
   const sugestoes = [
@@ -343,8 +284,8 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
       </div>
 
       <div className="border-t p-3">
-        {erroVoz && <p className="mb-2 text-xs text-destructive">{erroVoz}</p>}
-        {ouvindo && <p className="mb-2 text-xs text-destructive">Ouvindo... fale o pedido.</p>}
+        {voz.erro && <p className="mb-2 text-xs text-destructive">{voz.erro}</p>}
+        {voz.ouvindo && <p className="mb-2 text-xs text-destructive">Ouvindo... fale o pedido e toque em parar quando terminar.</p>}
         <div className="flex items-end gap-2">
           <Textarea
             value={entrada}
@@ -360,16 +301,16 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
             placeholder="Escreva ou fale o seu pedido..."
             className="min-h-0 flex-1 resize-none text-base sm:text-sm"
           />
-          {temVoz && (
+          {voz.temVoz && (
             <Button
               type="button"
-              variant={ouvindo ? "destructive" : "outline"}
+              variant={voz.ouvindo ? "destructive" : "outline"}
               size="icon-lg"
-              onClick={alternarMic}
+              onClick={voz.alternar}
               disabled={carregando}
-              aria-label={ouvindo ? "Parar de ouvir" : "Falar"}
+              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar"}
             >
-              {ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
+              {voz.ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
             </Button>
           )}
           <Button type="button" size="icon-lg" onClick={() => enviar()} disabled={carregando || !entrada.trim()} aria-label="Enviar">
