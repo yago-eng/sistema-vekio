@@ -1928,6 +1928,25 @@ export async function updateTarefa(id: string, campos: TarefaCampos): Promise<vo
   if (error) throw new Error(error.message);
 }
 
+// Ajustes rápidos feitos direto na lista (sem abrir a edição completa).
+export async function updateTarefaPrazo(id: string, prazo: string | null): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefas")
+    .update({ prazo, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateTarefaPrioridade(id: string, prioridade: TarefaPrioridade): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefas")
+    .update({ prioridade, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function updateTarefaStatus(id: string, status: TarefaStatus): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase

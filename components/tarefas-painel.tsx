@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { mudarStatusTarefaAction } from "@/lib/tarefa-actions";
+import { mudarPrazoTarefaAction, mudarPrioridadeTarefaAction, mudarStatusTarefaAction } from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -19,7 +18,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
 import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
 import { TarefasCalendario } from "@/components/tarefas-calendario";
-import { COR_PRIORIDADE, TarefaDetalheDialog, formatarPrazo } from "@/components/tarefa-detalhe-dialog";
+import { TarefaDetalheDialog } from "@/components/tarefa-detalhe-dialog";
+import { Avatares, ESTILO_STATUS, IconeStatus, PrazoRapido, PrioridadeRapida } from "@/components/tarefa-visual";
 import {
   Briefcase,
   CalendarDays,
@@ -37,10 +37,9 @@ import {
   Repeat,
   Star,
   Undo2,
-  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TAREFA_PRIORIDADES, type MembroEquipe, type Tarefa, type TarefaStatus } from "@/lib/types";
+import type { MembroEquipe, Tarefa, TarefaPrioridade, TarefaStatus } from "@/lib/types";
 
 const MINHAS = "minhas";
 const TODAS = "todas";
@@ -97,6 +96,9 @@ export function TarefasPainel({
   const [verTodasConcluidas, setVerTodasConcluidas] = useState(false);
   // Mudança de fase aparece na hora; o servidor confirma em seguida.
   const [otimista, setOtimista] = useState<Record<string, TarefaStatus>>({});
+  // Data e prioridade mudadas direto na linha também aparecem na hora.
+  const [ajustes, setAjustes] = useState<Record<string, { prazo?: string | null; prioridade?: TarefaPrioridade }>>({});
+  const [erroAjuste, setErroAjuste] = useState<string | null>(null);
   const [arrastandoId, setArrastandoId] = useState<string | null>(null);
   const [sobreSecao, setSobreSecao] = useState<string | null>(null);
 
@@ -140,15 +142,16 @@ export function TarefasPainel({
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    const atuais = tarefas.map((t) =>
-      otimista[t.id] && otimista[t.id] !== t.status
+    const atuais = tarefas.map((original) => {
+      const t = ajustes[original.id] ? { ...original, ...ajustes[original.id] } : original;
+      return otimista[t.id] && otimista[t.id] !== t.status
         ? {
             ...t,
             status: otimista[t.id],
             concluidaEm: otimista[t.id] === "concluida" ? new Date().toISOString() : null,
           }
-        : t
-    );
+        : t;
+    });
     return atuais.filter((t) => {
       const ehResponsavel = (id: string) => t.responsaveis.some((r) => r.id === id);
       if (responsavel === MINHAS && !ehResponsavel(usuarioId)) return false;
@@ -161,7 +164,7 @@ export function TarefasPainel({
       if (termo && !`${t.titulo} ${t.descricao}`.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [tarefas, otimista, responsavel, obra, busca, usuarioId]);
+  }, [tarefas, otimista, ajustes, responsavel, obra, busca, usuarioId]);
 
   const secoes = useMemo(
     () =>
@@ -189,6 +192,24 @@ export function TarefasPainel({
       router.refresh();
       setOtimista((o) => {
         const resto = { ...o };
+        delete resto[t.id];
+        return resto;
+      });
+    });
+  }
+
+  function ajustar(t: Tarefa, mudanca: { prazo: string | null } | { prioridade: TarefaPrioridade }) {
+    setErroAjuste(null);
+    setAjustes((a) => ({ ...a, [t.id]: { ...a[t.id], ...mudanca } }));
+    startTransition(async () => {
+      const res =
+        "prazo" in mudanca
+          ? await mudarPrazoTarefaAction(t.id, mudanca.prazo)
+          : await mudarPrioridadeTarefaAction(t.id, mudanca.prioridade);
+      if (res.error) setErroAjuste(res.error);
+      router.refresh();
+      setAjustes((a) => {
+        const resto = { ...a };
         delete resto[t.id];
         return resto;
       });
@@ -225,137 +246,155 @@ export function TarefasPainel({
     ...Object.fromEntries(obras.map((o) => [o.id, o.nome])),
   };
 
+  // Colunas da lista (telas largas): status | título | responsáveis | prazo | prioridade | ações.
+  const GRADE = pessoal
+    ? "md:grid-cols-[1.5rem_minmax(0,1fr)_8.5rem_7rem_7.5rem]"
+    : "md:grid-cols-[1.5rem_minmax(0,1fr)_6.5rem_8.5rem_7rem_7.5rem]";
+
   function linha(t: Tarefa, compacto = false) {
-    const atrasada = t.status !== "concluida" && !!t.prazo && t.prazo < hoje;
+    const est = ESTILO_STATUS[t.status];
+    const concluida = t.status === "concluida";
+    const proximo: TarefaStatus = t.status === "a_fazer" ? "fazendo" : t.status === "fazendo" ? "concluida" : "a_fazer";
+    const dicaStatus = t.status === "a_fazer" ? "Iniciar" : t.status === "fazendo" ? "Concluir" : "Reabrir (voltar para Pendentes)";
+
+    const iconeStatus = (
+      <button
+        type="button"
+        onClick={() => mover(t, proximo)}
+        aria-label={dicaStatus}
+        title={dicaStatus}
+        className={cn("shrink-0 rounded-full p-0.5 hover:bg-muted", est.icone)}
+      >
+        <IconeStatus status={t.status} className="size-5" />
+      </button>
+    );
+
+    const titulo = (
+      <button type="button" className="min-w-0 text-left" onClick={() => setAbertaId(t.id)}>
+        <span className={concluida ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{t.titulo}</span>
+      </button>
+    );
+
+    const indicadores = (
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
+        {t.checklistTotal > 0 && (
+          <span className="flex items-center gap-1">
+            <ListChecks className="size-3" />
+            {t.checklistFeitos}/{t.checklistTotal}
+          </span>
+        )}
+        {t.comentarios > 0 && (
+          <span className="flex items-center gap-1">
+            <MessageSquare className="size-3" />
+            {t.comentarios}
+          </span>
+        )}
+        {t.anexos > 0 && (
+          <span className="flex items-center gap-1">
+            <Paperclip className="size-3" />
+            {t.anexos}
+          </span>
+        )}
+        {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
+      </span>
+    );
+
+    const prazo = (
+      <PrazoRapido prazo={t.prazo} hoje={hoje} concluida={concluida} onEscolher={(p) => ajustar(t, { prazo: p })} />
+    );
+    const prioridade = <PrioridadeRapida prioridade={t.prioridade} onEscolher={(p) => ajustar(t, { prioridade: p })} />;
+
+    const acoes = (
+      <>
+        {t.status === "a_fazer" && (
+          <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => mover(t, "fazendo")}>
+            <Play className="size-3.5" />
+            Iniciar
+          </Button>
+        )}
+        {t.status === "fazendo" && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Voltar para pendentes"
+              title="Voltar para Pendentes"
+              onClick={() => mover(t, "a_fazer")}
+            >
+              <Undo2 className="size-3.5" />
+            </Button>
+            <Button type="button" size="sm" className="shrink-0 gap-1.5" onClick={() => mover(t, "concluida")}>
+              <Check className="size-3.5" />
+              Concluir
+            </Button>
+          </>
+        )}
+        {concluida && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Reabrir tarefa"
+            title="Reabrir (voltar para Pendentes)"
+            onClick={() => mover(t, "a_fazer")}
+          >
+            <Undo2 className="size-3.5" />
+          </Button>
+        )}
+      </>
+    );
+
     return (
-                    <div
-                      key={t.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", t.id);
-                        setArrastandoId(t.id);
-                      }}
-                      onDragEnd={() => {
-                        setArrastandoId(null);
-                        setSobreSecao(null);
-                      }}
-                      className={cn(
-                        "flex items-start gap-3 rounded-lg border bg-background px-3 py-2 hover:bg-muted/40",
-                        compacto && "flex-wrap",
-                        arrastandoId === t.id && "opacity-40"
-                      )}
-                    >
-                      <Checkbox
-                        className="mt-1"
-                        checked={t.status === "concluida"}
-                        onCheckedChange={(v) => mover(t, v ? "concluida" : "a_fazer")}
-                        aria-label="Concluir tarefa"
-                      />
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-                        onClick={() => setAbertaId(t.id)}
-                      >
-                        <span
-                          className={
-                            t.status === "concluida"
-                              ? "text-sm text-muted-foreground line-through"
-                              : "text-sm font-medium"
-                          }
-                        >
-                          {t.titulo}
-                        </span>
-                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          {(t.prioridade === "urgente" || t.prioridade === "alta") && (
-                            <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
-                              {TAREFA_PRIORIDADES.find((p) => p.id === t.prioridade)?.label}
-                            </Badge>
-                          )}
-                          {t.prazo && (
-                            <span className={atrasada ? "font-medium text-destructive" : undefined}>
-                              {formatarPrazo(t.prazo)}
-                              {atrasada && " · atrasada"}
-                            </span>
-                          )}
-                          {!obraFixaId && t.obraNome && <span>{t.obraNome}</span>}
-                          {!pessoal && t.responsaveis.length > 0 && (
-                            <span className="flex items-center gap-1">
-                              <User className="size-3" />
-                              {t.responsaveis.map((r) => r.nome).join(", ")}
-                            </span>
-                          )}
-                          {t.checklistTotal > 0 && (
-                            <span className="flex items-center gap-1">
-                              <ListChecks className="size-3" />
-                              {t.checklistFeitos}/{t.checklistTotal}
-                            </span>
-                          )}
-                          {t.comentarios > 0 && (
-                            <span className="flex items-center gap-1">
-                              <MessageSquare className="size-3" />
-                              {t.comentarios}
-                            </span>
-                          )}
-                          {t.anexos > 0 && (
-                            <span className="flex items-center gap-1">
-                              <Paperclip className="size-3" />
-                              {t.anexos}
-                            </span>
-                          )}
-                          {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}
-                        </span>
-                      </button>
-                      <div className={cn("flex shrink-0 items-center gap-1", compacto && "w-full justify-end pl-7")}>
-                      {t.status === "a_fazer" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 gap-1.5"
-                          onClick={() => mover(t, "fazendo")}
-                        >
-                          <Play className="size-3.5" />
-                          Iniciar
-                        </Button>
-                      )}
-                      {t.status === "fazendo" && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Voltar para pendentes"
-                            title="Voltar para Pendentes"
-                            onClick={() => mover(t, "a_fazer")}
-                          >
-                            <Undo2 className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="shrink-0 gap-1.5"
-                            onClick={() => mover(t, "concluida")}
-                          >
-                            <Check className="size-3.5" />
-                            Concluir
-                          </Button>
-                        </>
-                      )}
-                      {t.status === "concluida" && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Reabrir tarefa"
-                          title="Reabrir (voltar para Pendentes)"
-                          onClick={() => mover(t, "a_fazer")}
-                        >
-                          <Undo2 className="size-3.5" />
-                        </Button>
-                      )}
-                      </div>
-                    </div>
+      <div
+        key={t.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", t.id);
+          setArrastandoId(t.id);
+        }}
+        onDragEnd={() => {
+          setArrastandoId(null);
+          setSobreSecao(null);
+        }}
+        className={cn(
+          "rounded-lg border border-l-[3px] bg-background px-3 py-2 hover:bg-muted/40",
+          est.borda,
+          arrastandoId === t.id && "opacity-40"
+        )}
+      >
+        {/* Cartão: celular e quadro */}
+        <div className={cn(!compacto && "md:hidden")}>
+          <div className="flex items-start gap-2">
+            {iconeStatus}
+            <div className="min-w-0 flex-1">{titulo}</div>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-8">
+            {!pessoal && <Avatares responsaveis={t.responsaveis} />}
+            {prazo}
+            {prioridade}
+          </div>
+          <div className="mt-1 pl-8">{indicadores}</div>
+          <div className="mt-2 flex justify-end gap-1">{acoes}</div>
+        </div>
+
+        {/* Linha em colunas: telas largas */}
+        {!compacto && (
+          <div className={cn("hidden items-center gap-2 md:grid", GRADE)}>
+            {iconeStatus}
+            <div className="flex min-w-0 flex-col gap-0.5">
+              {titulo}
+              {indicadores}
+            </div>
+            {!pessoal && <Avatares responsaveis={t.responsaveis} />}
+            <div>{prazo}</div>
+            <div>{prioridade}</div>
+            <div className="flex justify-end gap-1">{acoes}</div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -512,6 +551,24 @@ export function TarefasPainel({
         </div>
       )}
 
+      {erroAjuste && <p className="text-sm text-destructive">{erroAjuste}</p>}
+
+      {tarefas.length > 0 && visao === "lista" && (
+        <div
+          className={cn(
+            "hidden gap-2 pr-[calc(0.75rem+1px)] pl-[calc(0.75rem+3px)] text-xs font-medium text-muted-foreground md:grid",
+            GRADE
+          )}
+        >
+          <span />
+          <span>Tarefa</span>
+          {!pessoal && <span>Responsáveis</span>}
+          <span className="pl-1.5">Prazo</span>
+          <span className="pl-1.5">Prioridade</span>
+          <span />
+        </div>
+      )}
+
       {tarefas.length > 0 &&
         visao === "lista" &&
         secoes.map((s) => {
@@ -543,8 +600,16 @@ export function TarefasPainel({
                 className="flex items-center gap-2 text-left text-sm font-semibold hover:text-foreground"
               >
                 {recolhida ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
-                {s.titulo}
-                <span className="font-normal text-muted-foreground">({s.itens.length})</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase",
+                    ESTILO_STATUS[s.id].pill
+                  )}
+                >
+                  <IconeStatus status={s.id} className="size-3.5" />
+                  {s.titulo}
+                </span>
+                <span className="font-normal text-muted-foreground">{s.itens.length}</span>
                 {atrasadas > 0 && (
                   <Badge variant="secondary" className="bg-red-100 text-red-700">
                     {atrasadas} atrasada{atrasadas > 1 ? "s" : ""}
@@ -595,8 +660,17 @@ export function TarefasPainel({
                   soltar(s.id);
                 }}
               >
-                <h3 className="text-sm font-semibold">
-                  {s.titulo} <span className="font-normal text-muted-foreground">({s.itens.length})</span>
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase",
+                      ESTILO_STATUS[s.id].pill
+                    )}
+                  >
+                    <IconeStatus status={s.id} className="size-3.5" />
+                    {s.titulo}
+                  </span>
+                  <span className="font-normal text-muted-foreground">{s.itens.length}</span>
                 </h3>
                 {s.itens.length === 0 && <p className="text-xs text-muted-foreground">{s.vazio}</p>}
                 {itens.map((t) => linha(t, true))}

@@ -25,6 +25,8 @@ import {
   listObras,
   setChecklistItemFeito,
   updateTarefa,
+  updateTarefaPrazo,
+  updateTarefaPrioridade,
   updateTarefaStatus,
   type TarefaCampos,
 } from "./store";
@@ -33,6 +35,7 @@ import {
   TAREFA_RECORRENCIAS,
   TAREFA_STATUS,
   type TarefaDetalhe,
+  type TarefaPrioridade,
   type TarefaRecorrencia,
   type TarefaStatus,
 } from "./types";
@@ -199,6 +202,37 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
     return { error: e instanceof Error ? e.message : "Não foi possível atualizar a tarefa." };
   }
 
+  atualizarTelas(tarefa.obraId);
+  return {};
+}
+
+export async function mudarPrazoTarefaAction(id: string, prazo: string | null): Promise<{ error?: string }> {
+  await exigirEquipe();
+  if (prazo !== null && !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) return { error: "Data inválida." };
+  const tarefa = await getTarefa(id);
+  if (!tarefa) return { error: "Tarefa não encontrada." };
+  if (prazo === null && tarefa.recorrencia !== "nenhuma") {
+    return { error: "Uma tarefa que se repete precisa de prazo." };
+  }
+  try {
+    await updateTarefaPrazo(id, prazo);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Não foi possível mudar o prazo." };
+  }
+  atualizarTelas(tarefa.obraId);
+  return {};
+}
+
+export async function mudarPrioridadeTarefaAction(id: string, prioridade: string): Promise<{ error?: string }> {
+  await exigirEquipe();
+  if (!TAREFA_PRIORIDADES.some((p) => p.id === prioridade)) return { error: "Prioridade inválida." };
+  const tarefa = await getTarefa(id);
+  if (!tarefa) return { error: "Tarefa não encontrada." };
+  try {
+    await updateTarefaPrioridade(id, prioridade as TarefaPrioridade);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Não foi possível mudar a prioridade." };
+  }
   atualizarTelas(tarefa.obraId);
   return {};
 }
