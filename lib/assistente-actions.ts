@@ -8,10 +8,12 @@ import {
   createDataImportanteAction,
   createLancamentoAvulsoAction,
   createPagamentoAction,
+  updateObraStatusAction,
   updatePagamentoRecebidoAction,
 } from "./actions";
 import { mudarStatusTarefaAction, salvarTarefaAction } from "./tarefa-actions";
 import { createClient } from "./supabase/server";
+import type { ObraStatus } from "./types";
 
 export type ResultadoAcao = { ok: true; mensagem: string; link?: string } | { ok: false; error: string };
 
@@ -66,6 +68,11 @@ export async function executarAcaoAssistenteAction(tipo: string, dados: Record<s
         const res = await createLancamentoAvulsoAction(undefined, fd);
         if (res.error) return { ok: false, error: res.error };
         return { ok: true, mensagem: "Gasto lançado.", link: `/obras/${d.obra_id as string}` };
+      }
+
+      case "mudar_status_obra": {
+        await updateObraStatusAction(d.obra_id as string, d.status as ObraStatus);
+        return { ok: true, mensagem: "Status da obra atualizado.", link: `/obras/${d.obra_id as string}` };
       }
 
       case "lancar_pagamento": {
