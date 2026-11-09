@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { mudarPrazoTarefaAction, mudarPrioridadeTarefaAction, mudarStatusTarefaAction } from "@/lib/tarefa-actions";
+import {
+  mudarPrazoTarefaAction,
+  mudarPrioridadeTarefaAction,
+  mudarResponsaveisTarefaAction,
+  mudarStatusTarefaAction,
+} from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +24,7 @@ import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
 import { TarefaIaBarra } from "@/components/tarefa-ia-barra";
 import { TarefasCalendario } from "@/components/tarefas-calendario";
 import { TarefaDetalheDialog } from "@/components/tarefa-detalhe-dialog";
-import { Avatares, ESTILO_STATUS, IconeStatus, PrazoRapido, PrioridadeRapida } from "@/components/tarefa-visual";
+import { ESTILO_STATUS, IconeStatus, PrazoRapido, PrioridadeRapida, ResponsaveisRapido } from "@/components/tarefa-visual";
 import {
   Briefcase,
   CalendarDays,
@@ -97,7 +102,10 @@ export function TarefasPainel({
   // Mudança de fase aparece na hora; o servidor confirma em seguida.
   const [otimista, setOtimista] = useState<Record<string, TarefaStatus>>({});
   // Data e prioridade mudadas direto na linha também aparecem na hora.
-  const [ajustes, setAjustes] = useState<Record<string, { prazo?: string | null; prioridade?: TarefaPrioridade }>>({});
+  const [ajustes, setAjustes] = useState<
+    Record<string, { prazo?: string | null; prioridade?: TarefaPrioridade; responsaveis?: MembroEquipe[] }>
+  >({});
+  const versoes = useRef<Record<string, number>>({});
   const [erroAjuste, setErroAjuste] = useState<string | null>(null);
   const [arrastandoId, setArrastandoId] = useState<string | null>(null);
   const [sobreSecao, setSobreSecao] = useState<string | null>(null);
@@ -198,21 +206,33 @@ export function TarefasPainel({
     });
   }
 
-  function ajustar(t: Tarefa, mudanca: { prazo: string | null } | { prioridade: TarefaPrioridade }) {
+  function ajustar(
+    t: Tarefa,
+    mudanca: { prazo: string | null } | { prioridade: TarefaPrioridade } | { responsaveis: MembroEquipe[] }
+  ) {
     setErroAjuste(null);
+    const versao = (versoes.current[t.id] = (versoes.current[t.id] ?? 0) + 1);
     setAjustes((a) => ({ ...a, [t.id]: { ...a[t.id], ...mudanca } }));
     startTransition(async () => {
       const res =
         "prazo" in mudanca
           ? await mudarPrazoTarefaAction(t.id, mudanca.prazo)
-          : await mudarPrioridadeTarefaAction(t.id, mudanca.prioridade);
+          : "prioridade" in mudanca
+            ? await mudarPrioridadeTarefaAction(t.id, mudanca.prioridade)
+            : await mudarResponsaveisTarefaAction(
+                t.id,
+                mudanca.responsaveis.map((r) => r.id)
+              );
       if (res.error) setErroAjuste(res.error);
       router.refresh();
-      setAjustes((a) => {
-        const resto = { ...a };
-        delete resto[t.id];
-        return resto;
-      });
+      // Só limpa se não houve outra mudança nesta tarefa enquanto esta salvava.
+      if (versoes.current[t.id] === versao) {
+        setAjustes((a) => {
+          const resto = { ...a };
+          delete resto[t.id];
+          return resto;
+        });
+      }
     });
   }
 
@@ -303,6 +323,13 @@ export function TarefasPainel({
     const prazo = (
       <PrazoRapido prazo={t.prazo} hoje={hoje} concluida={concluida} onEscolher={(p) => ajustar(t, { prazo: p })} />
     );
+    const responsaveisCampo = pessoal ? null : (
+      <ResponsaveisRapido
+        responsaveis={t.responsaveis}
+        membros={membros}
+        onMudar={(rs) => ajustar(t, { responsaveis: rs })}
+      />
+    );
     const prioridade = <PrioridadeRapida prioridade={t.prioridade} onEscolher={(p) => ajustar(t, { prioridade: p })} />;
 
     const acoes = (
@@ -372,7 +399,7 @@ export function TarefasPainel({
             <div className="min-w-0 flex-1">{titulo}</div>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-8">
-            {!pessoal && <Avatares responsaveis={t.responsaveis} />}
+            {responsaveisCampo}
             {prazo}
             {prioridade}
           </div>
@@ -388,7 +415,7 @@ export function TarefasPainel({
               {titulo}
               {indicadores}
             </div>
-            {!pessoal && <Avatares responsaveis={t.responsaveis} />}
+            {responsaveisCampo}
             <div>{prazo}</div>
             <div>{prioridade}</div>
             <div className="flex justify-end gap-1">{acoes}</div>

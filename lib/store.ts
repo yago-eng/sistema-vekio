@@ -1938,6 +1938,19 @@ export async function updateTarefaPrazo(id: string, prazo: string | null): Promi
   if (error) throw new Error(error.message);
 }
 
+export async function updateTarefaResponsaveis(id: string, responsavelIds: string[]): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tarefas")
+    .update({
+      responsaveis: responsavelIds,
+      responsavel_id: responsavelIds[0] ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function updateTarefaPrioridade(id: string, prioridade: TarefaPrioridade): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase

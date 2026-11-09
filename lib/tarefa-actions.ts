@@ -27,6 +27,7 @@ import {
   updateTarefa,
   updateTarefaPrazo,
   updateTarefaPrioridade,
+  updateTarefaResponsaveis,
   updateTarefaStatus,
   type TarefaCampos,
 } from "./store";
@@ -232,6 +233,40 @@ export async function mudarPrioridadeTarefaAction(id: string, prioridade: string
     await updateTarefaPrioridade(id, prioridade as TarefaPrioridade);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não foi possível mudar a prioridade." };
+  }
+  atualizarTelas(tarefa.obraId);
+  return {};
+}
+
+export async function mudarResponsaveisTarefaAction(id: string, responsavelIds: string[]): Promise<{ error?: string }> {
+  const user = await exigirEquipe();
+  const tarefa = await getTarefa(id);
+  if (!tarefa) return { error: "Tarefa não encontrada." };
+  if (tarefa.pessoal) return { error: "Tarefa pessoal não tem outros responsáveis." };
+
+  const permitidos = limitarResponsaveis(await listMembrosEquipe(), { gestao: tarefa.gestao });
+  const anteriores = tarefa.responsaveis.map((r) => r.id);
+  // Mantém quem já era responsável mesmo fora da lista; só aceita novos que a lista permite.
+  const novos = Array.from(new Set(responsavelIds)).filter(
+    (rid) => permitidos.some((m) => m.id === rid) || anteriores.includes(rid)
+  );
+
+  try {
+    await updateTarefaResponsaveis(id, novos);
+    for (const rid of novos) {
+      if (rid === user.id || anteriores.includes(rid)) continue;
+      await registrarNotificacao({
+        tipo: "tarefa",
+        titulo: "Tarefa para você",
+        descricao: `${user.nome} atribuiu a tarefa "${tarefa.titulo}" a você.`,
+        link: `/tarefas?tarefa=${id}`,
+        atorId: user.id,
+        atorNome: user.nome,
+        destinatarioId: rid,
+      });
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Não foi possível mudar os responsáveis." };
   }
   atualizarTelas(tarefa.obraId);
   return {};

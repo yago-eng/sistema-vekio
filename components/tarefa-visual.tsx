@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarPlus, Check, CircleCheck, CircleDashed, Contrast, Flag } from "lucide-react";
+import { CalendarPlus, Check, CircleCheck, CircleDashed, Contrast, Flag, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TAREFA_PRIORIDADES, type MembroEquipe, type TarefaPrioridade, type TarefaStatus } from "@/lib/types";
 
@@ -74,6 +74,66 @@ export function Avatares({ responsaveis, max = 3 }: { responsaveis: MembroEquipe
         </span>
       )}
     </div>
+  );
+}
+
+// Clicar nos responsáveis abre a lista da equipe: marcar/desmarcar salva na hora.
+export function ResponsaveisRapido({
+  responsaveis,
+  membros,
+  onMudar,
+}: {
+  responsaveis: MembroEquipe[];
+  membros: MembroEquipe[];
+  onMudar: (responsaveis: MembroEquipe[]) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  // Quem já é responsável sempre aparece na lista, para poder ser removido.
+  const opcoes = [...membros, ...responsaveis.filter((r) => !membros.some((m) => m.id === r.id))];
+  const marcados = new Set(responsaveis.map((r) => r.id));
+
+  function alternar(m: MembroEquipe) {
+    onMudar(marcados.has(m.id) ? responsaveis.filter((r) => r.id !== m.id) : [...responsaveis, m]);
+  }
+
+  return (
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger
+        className="inline-flex items-center rounded-md px-1 py-1 hover:bg-muted"
+        aria-label="Mudar responsáveis"
+        title="Mudar responsáveis"
+      >
+        {responsaveis.length > 0 ? (
+          <Avatares responsaveis={responsaveis} />
+        ) : (
+          <UserPlus className="size-4 text-muted-foreground/50" />
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-56">
+        <div className="flex flex-col">
+          {opcoes.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">Ninguém disponível.</p>}
+          {opcoes.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => alternar(m)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+            >
+              <span
+                className={cn(
+                  "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold text-white",
+                  corDe(m.id)
+                )}
+              >
+                {(m.nome.trim()[0] ?? "?").toUpperCase()}
+              </span>
+              {m.nome}
+              {marcados.has(m.id) && <Check className="ml-auto size-3.5" />}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
