@@ -137,14 +137,14 @@ export function TarefaIaBarra({
               variant={voz.ouvindo ? "destructive" : "outline"}
               size="icon"
               onClick={voz.alternar}
-              disabled={pending}
+              disabled={pending || voz.transcrevendo}
               aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar a tarefa"}
               title={voz.ouvindo ? "Parar" : "Falar a tarefa"}
             >
               {voz.ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
             </Button>
           )}
-          <Button type="button" size="icon" onClick={enviar} disabled={pending || !texto.trim()} aria-label="Criar tarefa">
+          <Button type="button" size="icon" onClick={enviar} disabled={pending || voz.transcrevendo || !texto.trim()} aria-label="Criar tarefa">
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           </Button>
         </div>
@@ -155,6 +155,12 @@ export function TarefaIaBarra({
           <Checkbox checked={direto} onCheckedChange={(v) => alternarDireto(!!v)} />
           Criar direto, sem revisar
         </label>
+        {voz.transcrevendo && (
+          <span className="flex items-center gap-1.5">
+            <Loader2 className="size-3 animate-spin" />
+            Transcrevendo o áudio...
+          </span>
+        )}
         {voz.ouvindo && <span className="text-destructive">Ouvindo... fale a tarefa e toque em parar quando terminar.</span>}
         {!voz.temVoz && <span>Para falar em vez de digitar, use o microfone do teclado do celular.</span>}
       </div>

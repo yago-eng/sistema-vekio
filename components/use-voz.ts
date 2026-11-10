@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Ditado por voz transcrito no próprio aparelho (Chrome, Edge, Safari); só o texto sai dele.
-// O navegador encerra o reconhecimento sozinho a cada pausa na fala. Aqui ele é religado enquanto
-// a pessoa não tocar em parar, então dá para pensar e falar em partes.
+// Entrada por voz, com dois modos (a tela não precisa saber qual está em uso):
+// 1. Servidor (preferido, quando a transcrição está configurada): grava o áudio no aparelho e
+//    transcreve no servidor. Funciona igual em qualquer aparelho, inclusive o Safari do iPhone, onde
+//    o reconhecimento de voz do navegador deixa de funcionar depois do primeiro uso.
+// 2. Navegador (reserva): ditado do próprio navegador (Chrome, Edge, Safari). Ele encerra a cada
+//    pausa na fala, então é religado enquanto a pessoa não tocar em parar.
 type Reconhecimento = {
   lang: string;
   interimResults: boolean;
@@ -35,7 +38,7 @@ function construtor(): ConstrutorReconhecimento | undefined {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 }
 
-export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => void) {
+function useVozNavegador(textoAtual: () => string, aoMudar: (texto: string) => void) {
   const [temVoz, setTemVoz] = useState(false);
   const [ouvindo, setOuvindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -225,4 +228,195 @@ export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => voi
   }
 
   return { temVoz, ouvindo, erro, alternar, parar };
+}
+
+// --- Modo servidor: grava com o microfone do aparelho e transcreve no servidor ---
+
+const TIPOS_DE_AUDIO = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+const LIMITE_DA_GRAVACAO_MS = 3 * 60_000;
+
+function gravacaoSuportada() {
+  return (
+    typeof window !== "undefined" &&
+    typeof MediaRecorder !== "undefined" &&
+    Boolean(navigator.mediaDevices?.getUserMedia)
+  );
+}
+
+function extensaoDoAudio(tipo: string) {
+  if (tipo.includes("webm")) return "webm";
+  if (tipo.includes("ogg")) return "ogg";
+  if (tipo.includes("wav")) return "wav";
+  return "m4a"; // audio/mp4 (Safari)
+}
+
+function useVozServidor(textoAtual: () => string, aoMudar: (texto: string) => void) {
+  const [temVoz, setTemVoz] = useState(false);
+  const [gravando, setGravando] = useState(false);
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const pedacosRef = useRef<Blob[]>([]);
+  const inicioRef = useRef(0);
+  const limiteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textoRef = useRef(textoAtual);
+  const mudarRef = useRef(aoMudar);
+
+  useEffect(() => {
+    textoRef.current = textoAtual;
+    mudarRef.current = aoMudar;
+  });
+
+  // Solta o microfone de verdade: sem isso o aparelho continua com ele "ocupado".
+  function liberarMicrofone() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
+  useEffect(() => {
+    setTemVoz(gravacaoSuportada());
+    return () => {
+      if (limiteRef.current) clearTimeout(limiteRef.current);
+      const rec = recRef.current;
+      recRef.current = null;
+      if (rec && rec.state !== "inactive") {
+        rec.onstop = null;
+        rec.stop();
+      }
+      liberarMicrofone();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function transcrever(blob: Blob, tipo: string) {
+    const duracao = Date.now() - inicioRef.current;
+    if (blob.size < 1500 || duracao < 700) {
+      setErro("Gravação muito curta. Toque no microfone e fale o pedido.");
+      return;
+    }
+    setTranscrevendo(true);
+    try {
+      const form = new FormData();
+      form.append("audio", blob, `audio.${extensaoDoAudio(tipo)}`);
+      const res = await fetch("/api/transcrever", { method: "POST", body: form });
+      const json = (await res.json().catch(() => ({}))) as { texto?: string; error?: string };
+      if (!res.ok || typeof json.texto !== "string") {
+        setErro(json.error ?? "Não consegui transcrever. Tente de novo ou digite.");
+        return;
+      }
+      const falado = json.texto.trim();
+      if (!falado) {
+        setErro("Não ouvi nada na gravação. Tente de novo, falando mais perto do aparelho.");
+        return;
+      }
+      const base = textoRef.current().trim();
+      mudarRef.current(base ? `${base} ${falado}` : falado);
+    } catch {
+      setErro("Falha de conexão ao transcrever. Tente de novo.");
+    } finally {
+      setTranscrevendo(false);
+    }
+  }
+
+  function parar() {
+    if (limiteRef.current) clearTimeout(limiteRef.current);
+    const rec = recRef.current;
+    recRef.current = null;
+    setGravando(false);
+    if (rec && rec.state !== "inactive") rec.stop(); // o onstop envia para transcrever
+    else liberarMicrofone();
+  }
+
+  async function iniciar() {
+    setErro(null);
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      const nome = (e as { name?: string })?.name;
+      setErro(
+        nome === "NotAllowedError" || nome === "SecurityError"
+          ? "Permita o uso do microfone no navegador para falar."
+          : "Não encontrei o microfone neste aparelho."
+      );
+      return;
+    }
+    streamRef.current = stream;
+
+    const tipo = TIPOS_DE_AUDIO.find((t) => MediaRecorder.isTypeSupported(t));
+    let rec: MediaRecorder;
+    try {
+      rec = tipo ? new MediaRecorder(stream, { mimeType: tipo }) : new MediaRecorder(stream);
+    } catch {
+      liberarMicrofone();
+      setErro("Este aparelho não conseguiu gravar o áudio. Digite o pedido.");
+      return;
+    }
+
+    pedacosRef.current = [];
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) pedacosRef.current.push(e.data);
+    };
+    rec.onstop = () => {
+      liberarMicrofone();
+      const tipoFinal = rec.mimeType || tipo || "audio/mp4";
+      void transcrever(new Blob(pedacosRef.current, { type: tipoFinal }), tipoFinal);
+    };
+    rec.onerror = () => {
+      liberarMicrofone();
+      recRef.current = null;
+      setGravando(false);
+      setErro("A gravação falhou. Tente de novo.");
+    };
+    rec.start();
+    recRef.current = rec;
+    inicioRef.current = Date.now();
+    setGravando(true);
+    limiteRef.current = setTimeout(parar, LIMITE_DA_GRAVACAO_MS);
+  }
+
+  function alternar() {
+    if (transcrevendo) return;
+    if (recRef.current) {
+      parar();
+      return;
+    }
+    void iniciar();
+  }
+
+  return { temVoz, ouvindo: gravando, transcrevendo, erro, alternar, parar };
+}
+
+// --- Escolha do modo ---
+
+let verificacaoDoServidor: Promise<boolean> | null = null;
+function servidorTranscreve(): Promise<boolean> {
+  if (!verificacaoDoServidor) {
+    verificacaoDoServidor = fetch("/api/transcrever")
+      .then((r) => (r.ok ? r.json() : { ativo: false }))
+      .then((j) => Boolean((j as { ativo?: boolean }).ativo))
+      .catch(() => false);
+  }
+  return verificacaoDoServidor;
+}
+
+export function useVoz(textoAtual: () => string, aoMudar: (texto: string) => void) {
+  const navegador = useVozNavegador(textoAtual, aoMudar);
+  const servidor = useVozServidor(textoAtual, aoMudar);
+  const [usarServidor, setUsarServidor] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+    if (!gravacaoSuportada()) return;
+    servidorTranscreve().then((ok) => {
+      if (ativo) setUsarServidor(ok);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  if (usarServidor) return servidor;
+  return { ...navegador, transcrevendo: false };
 }

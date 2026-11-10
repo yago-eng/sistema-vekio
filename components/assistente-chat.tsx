@@ -294,6 +294,12 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
 
       <div className="border-t p-3">
         {voz.erro && <p className="mb-2 text-xs text-destructive">{voz.erro}</p>}
+        {voz.transcrevendo && (
+          <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            Transcrevendo o áudio...
+          </p>
+        )}
         {voz.ouvindo && <p className="mb-2 text-xs text-destructive">Ouvindo... fale o pedido e toque em parar quando terminar.</p>}
         <div className="flex items-end gap-2">
           <Textarea
@@ -316,13 +322,13 @@ export function AssistenteChat({ ehAdmin, podeTarefas }: { ehAdmin: boolean; pod
               variant={voz.ouvindo ? "destructive" : "outline"}
               size="icon-lg"
               onClick={voz.alternar}
-              disabled={carregando}
+              disabled={carregando || voz.transcrevendo}
               aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar"}
             >
               {voz.ouvindo ? <Square className="size-4" /> : <Mic className="size-4" />}
             </Button>
           )}
-          <Button type="button" size="icon-lg" onClick={() => enviar()} disabled={carregando || !entrada.trim()} aria-label="Enviar">
+          <Button type="button" size="icon-lg" onClick={() => enviar()} disabled={carregando || voz.transcrevendo || !entrada.trim()} aria-label="Enviar">
             {carregando ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </Button>
         </div>
