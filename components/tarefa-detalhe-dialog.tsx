@@ -403,7 +403,7 @@ export function TarefaDetalheDialog({
               {detalhe.comentarios.map((c) => (
                 <div key={c.id} className="flex flex-col gap-0.5 rounded-lg bg-muted/50 px-3 py-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{c.autorNome}</span>
+                    <span className="text-base font-semibold text-foreground capitalize">{c.autorNome}</span>
                     <span>{quando(c.createdAt)}</span>
                     {(c.autorId === usuarioId || isAdmin) && (
                       <button
@@ -432,7 +432,7 @@ export function TarefaDetalheDialog({
                         className={cn(
                           "mt-1 flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
                           curti
-                            ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                            ? "border-yellow-400/70 bg-yellow-100 font-medium text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-400"
                             : "border-transparent text-muted-foreground hover:border-border hover:bg-background"
                         )}
                       >
