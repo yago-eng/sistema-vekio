@@ -1824,7 +1824,7 @@ export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | unde
     supabase.from("tarefa_checklist").select("id, texto, feito").eq("tarefa_id", id).order("ordem").order("created_at"),
     supabase
       .from("tarefa_comentarios")
-      .select("id, autor_id, texto, created_at, profiles(nome)")
+      .select("id, autor_id, texto, created_at, profiles!autor_id(nome)")
       .eq("tarefa_id", id)
       .order("created_at"),
     supabase
@@ -1839,7 +1839,7 @@ export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | unde
   if (idsComentarios.length > 0) {
     const { data: reacoes } = await supabase
       .from("tarefa_comentario_reacoes")
-      .select("comentario_id, user_id, profiles(nome)")
+      .select("comentario_id, user_id, profiles!user_id(nome)")
       .in("comentario_id", idsComentarios)
       .order("created_at");
     for (const r of reacoes ?? []) {
