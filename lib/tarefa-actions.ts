@@ -164,6 +164,28 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
       }
     }
 
+    // Menções (@) na descrição: avisa quem foi citado agora e ainda não tinha sido. Quem acabou de
+    // entrar como responsável já recebeu o aviso de atribuição, então não recebe outro.
+    if (!pessoal) {
+      const jaCitados = new Set(encontrarMencoes(atual?.descricao ?? "", permitidos).map((m) => m.membro.id));
+      const jaAvisados = new Set(
+        campos.responsavelIds.filter((rid) => rid !== user.id && !responsaveisAnteriores.includes(rid))
+      );
+      const citados = new Set(encontrarMencoes(campos.descricao, permitidos).map((m) => m.membro.id));
+      for (const mid of citados) {
+        if (mid === user.id || jaCitados.has(mid) || jaAvisados.has(mid)) continue;
+        await registrarNotificacao({
+          tipo: "tarefa",
+          titulo: "Você foi mencionado",
+          descricao: `${user.nome} mencionou você na descrição de "${titulo}".`,
+          link: `/tarefas?tarefa=${id}`,
+          atorId: user.id,
+          atorNome: user.nome,
+          destinatarioId: mid,
+        });
+      }
+    }
+
     atualizarTelas(campos.obraId);
     if (obraAnterior && obraAnterior !== campos.obraId) atualizarTelas(obraAnterior);
     return { id };

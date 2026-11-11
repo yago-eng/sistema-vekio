@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { listOrcamentoPropostas } from "@/lib/store";
 import { REGIOES, PIPELINE_STATUS, type PipelineStatus } from "@/lib/types";
+import { regiaoPadrao } from "@/lib/regiao-padrao";
 import { OrcamentoPropostaFormDialog } from "@/components/orcamento-proposta-form-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +78,7 @@ export default async function OrcamentosPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue={REGIOES[0]}>
+      <Tabs defaultValue={regiaoPadrao(currentUser)}>
         <TabsList>
           {REGIOES.map((r) => (
             <TabsTrigger key={r} value={r}>

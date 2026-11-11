@@ -5,6 +5,7 @@ import { FavoritaBotao } from "@/components/favorita-botao";
 import { Star } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { REGIOES } from "@/lib/types";
+import { regiaoPadrao } from "@/lib/regiao-padrao";
 import { ObraFormDialog } from "@/components/obra-form-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ export default async function ObrasPage({
   const defaultRegiao =
     regiaoAtual && REGIOES.includes(regiaoAtual as (typeof REGIOES)[number])
       ? regiaoAtual
-      : REGIOES[0];
+      : regiaoPadrao(usuario);
 
   return (
     <div className="flex flex-col gap-6">

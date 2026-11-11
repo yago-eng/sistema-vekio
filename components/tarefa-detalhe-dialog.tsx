@@ -269,7 +269,11 @@ export function TarefaDetalheDialog({
               )}
             </dl>
 
-            {t.descricao && <p className="whitespace-pre-wrap text-sm">{t.descricao}</p>}
+            {t.descricao && (
+              <p className="whitespace-pre-wrap text-sm">
+                <TextoComMencoes texto={t.descricao} membros={membros} />
+              </p>
+            )}
 
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold">

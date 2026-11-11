@@ -5,7 +5,7 @@ import { salvarTarefaAction } from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { ComentarioInput } from "@/components/comentario-input";
 import {
   Select,
   SelectContent,
@@ -104,10 +104,12 @@ export function TarefaForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="tarefa-descricao">Descrição (opcional)</Label>
-        <Textarea
+        <ComentarioInput
           id="tarefa-descricao"
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
+          valor={descricao}
+          onChange={setDescricao}
+          membros={membros}
+          usuarioId={usuarioId}
           placeholder="Detalhes, links, o que precisa ser feito..."
         />
       </div>

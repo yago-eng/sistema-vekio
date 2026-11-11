@@ -17,12 +17,14 @@ export function ComentarioInput({
   membros,
   usuarioId,
   placeholder,
+  id,
 }: {
   valor: string;
   onChange: (valor: string) => void;
   membros: MembroEquipe[];
   usuarioId: string;
   placeholder?: string;
+  id?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [cursor, setCursor] = useState(0);
@@ -61,6 +63,7 @@ export function ComentarioInput({
     <div className="relative">
       <Textarea
         ref={ref}
+        id={id}
         value={valor}
         onChange={(e) => {
           onChange(e.target.value);
@@ -114,7 +117,9 @@ export function ComentarioInput({
           ))}
         </ul>
       )}
-      <p className="mt-1 text-xs text-muted-foreground">Digite @ para mencionar alguém. A pessoa recebe um aviso.</p>
+      {membros.length > 0 && (
+        <p className="mt-1 text-xs text-muted-foreground">Digite @ para mencionar alguém. A pessoa recebe um aviso.</p>
+      )}
     </div>
   );
 }
