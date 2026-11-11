@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   mudarPrazoTarefaAction,
   mudarPrioridadeTarefaAction,
@@ -98,6 +98,17 @@ export function TarefasPainel({
   const [busca, setBusca] = useState("");
   const [criando, setCriando] = useState(false);
   const [abertaId, setAbertaId] = useState<string | null>(abrirId ?? null);
+  // Clicar num aviso de tarefa estando já na tela de Tarefas só muda o endereço (?tarefa=):
+  // acompanha essa mudança para abrir a tarefa, e limpa o endereço ao fechar.
+  const pathname = usePathname();
+  const tarefaDoEndereco = useSearchParams().get("tarefa");
+  useEffect(() => {
+    if (tarefaDoEndereco && tarefaDoEndereco === abrirId) setAbertaId(tarefaDoEndereco);
+  }, [tarefaDoEndereco, abrirId]);
+  function fecharDetalhe() {
+    setAbertaId(null);
+    if (tarefaDoEndereco) window.history.replaceState(null, "", pathname);
+  }
   const [verTodasConcluidas, setVerTodasConcluidas] = useState(false);
   // Mudança de fase aparece na hora; o servidor confirma em seguida.
   const [otimista, setOtimista] = useState<Record<string, TarefaStatus>>({});
@@ -746,7 +757,7 @@ export function TarefasPainel({
 
       <TarefaDetalheDialog
         id={abertaId}
-        onFechar={() => setAbertaId(null)}
+        onFechar={fecharDetalhe}
         membros={membros}
         obras={obras}
         obraFixaId={obraFixaId}

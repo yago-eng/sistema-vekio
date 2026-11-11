@@ -375,6 +375,8 @@ export type TarefaComentario = {
   autorNome: string;
   texto: string;
   createdAt: string;
+  // Quem deu "joinha" (👍) no comentário.
+  curtidas: { id: string; nome: string }[];
 };
 export type TarefaAnexo = {
   id: string;

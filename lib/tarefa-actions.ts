@@ -19,6 +19,7 @@ import {
   deleteTarefa,
   deleteTarefaAnexo,
   deleteTarefaComentario,
+  alternarCurtidaComentario,
   getTarefa,
   getTarefaAnexo,
   getTarefaDetalhe,
@@ -389,6 +390,37 @@ export async function comentarTarefaAction(tarefaId: string, texto: string): Pro
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não foi possível comentar." };
+  }
+  revalidatePath("/tarefas");
+  return {};
+}
+
+// 👍 num comentário: serve de "ok" sem precisar responder. Clicar de novo tira a reação.
+export async function curtirComentarioAction(comentarioId: string): Promise<{ error?: string }> {
+  const user = await exigirEquipe();
+  const res = await alternarCurtidaComentario(comentarioId, user.id);
+  if ("error" in res) {
+    return {
+      error: /relation|does not exist|schema cache/i.test(res.error)
+        ? "As reações ainda não foram ativadas no banco de dados."
+        : res.error,
+    };
+  }
+  // Avisa o autor quando alguém curte (não ao tirar a reação, nem na curtida em si mesmo).
+  if (res.curtido && res.autorId && res.autorId !== user.id) {
+    const tarefa = await getTarefa(res.tarefaId);
+    if (tarefa && !tarefa.pessoal) {
+      const trecho = res.texto.length > 60 ? `${res.texto.slice(0, 60)}…` : res.texto;
+      await registrarNotificacao({
+        tipo: "tarefa",
+        titulo: "Curtiram seu comentário",
+        descricao: `${user.nome} deu 👍 no seu comentário em "${tarefa.titulo}": ${trecho}`,
+        link: `/tarefas?tarefa=${res.tarefaId}`,
+        atorId: user.id,
+        atorNome: user.nome,
+        destinatarioId: res.autorId,
+      });
+    }
   }
   revalidatePath("/tarefas");
   return {};

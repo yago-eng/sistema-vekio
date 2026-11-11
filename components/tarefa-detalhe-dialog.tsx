@@ -6,6 +6,7 @@ import {
   adicionarChecklistAction,
   carregarTarefaAction,
   comentarTarefaAction,
+  curtirComentarioAction,
   criarUploadTarefaAction,
   excluirAnexoTarefaAction,
   excluirChecklistAction,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/tarefa-actions";
 import { enviarArquivoDireto } from "@/lib/upload-client";
 import { comprimirImagemSeNecessario } from "@/lib/image-compress";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComentarioInput, TextoComMencoes } from "@/components/comentario-input";
@@ -31,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TarefaForm, type ObraOpcao } from "@/components/tarefa-form";
-import { Download, Loader2, Paperclip, Pencil, Plus, Repeat, Trash2 } from "lucide-react";
+import { Download, Loader2, Paperclip, Pencil, Plus, Repeat, ThumbsUp, Trash2 } from "lucide-react";
 import {
   TAREFA_PRIORIDADES,
   TAREFA_RECORRENCIAS,
@@ -117,6 +119,31 @@ export function TarefaDetalheDialog({
       ativo = false;
     };
   }, [id]);
+
+  // 👍 aparece na hora; o servidor confirma em seguida (e desfaz se der erro).
+  async function curtir(comentarioId: string) {
+    if (!id) return;
+    setErro(null);
+    const meuNome = membros.find((m) => m.id === usuarioId)?.nome ?? "Você";
+    setDetalhe((d) =>
+      d
+        ? {
+            ...d,
+            comentarios: d.comentarios.map((c) =>
+              c.id !== comentarioId
+                ? c
+                : c.curtidas.some((x) => x.id === usuarioId)
+                  ? { ...c, curtidas: c.curtidas.filter((x) => x.id !== usuarioId) }
+                  : { ...c, curtidas: [...c.curtidas, { id: usuarioId, nome: meuNome }] }
+            ),
+          }
+        : d
+    );
+    const res = await curtirComentarioAction(comentarioId);
+    if (res.error) setErro(res.error);
+    const atualizado = await carregarTarefaAction(id);
+    if (atualizado) setDetalhe(atualizado);
+  }
 
   function rodar(fn: () => Promise<{ error?: string } | void>) {
     setErro(null);
@@ -392,6 +419,35 @@ export function TarefaDetalheDialog({
                   <p className="whitespace-pre-wrap text-sm">
                     <TextoComMencoes texto={c.texto} membros={membros} />
                   </p>
+                  {(() => {
+                    const curti = c.curtidas.some((x) => x.id === usuarioId);
+                    const quem = c.curtidas.map((x) => (x.id === usuarioId ? "Você" : x.nome)).join(", ");
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => curtir(c.id)}
+                        title={quem ? `👍 ${quem}` : "Dar um 👍 (ok) neste comentário"}
+                        aria-label={curti ? "Tirar o joinha" : "Dar um joinha"}
+                        aria-pressed={curti}
+                        className={cn(
+                          "mt-1 flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+                          curti
+                            ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                            : "border-transparent text-muted-foreground hover:border-border hover:bg-background"
+                        )}
+                      >
+                        <ThumbsUp className={cn("size-3.5", curti && "fill-current")} />
+                        {c.curtidas.length > 0 && (
+                          <span>
+                            {c.curtidas.length}
+                            <span className="ml-1 hidden font-normal text-muted-foreground sm:inline">
+                              {c.curtidas.length <= 2 ? quem : ""}
+                            </span>
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
               ))}
               <form

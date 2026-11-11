@@ -1833,6 +1833,24 @@ export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | unde
       .eq("tarefa_id", id)
       .order("created_at"),
   ]);
+  // Reações (👍) dos comentários. Se a tabela ainda não existe, segue sem elas.
+  const idsComentarios = (comentarios.data ?? []).map((c) => c.id as string);
+  const curtidasPorComentario = new Map<string, { id: string; nome: string }[]>();
+  if (idsComentarios.length > 0) {
+    const { data: reacoes } = await supabase
+      .from("tarefa_comentario_reacoes")
+      .select("comentario_id, user_id, profiles(nome)")
+      .in("comentario_id", idsComentarios)
+      .order("created_at");
+    for (const r of reacoes ?? []) {
+      const lista = curtidasPorComentario.get(r.comentario_id as string) ?? [];
+      lista.push({
+        id: r.user_id as string,
+        nome: (r.profiles as unknown as { nome: string } | null)?.nome ?? "Alguém",
+      });
+      curtidasPorComentario.set(r.comentario_id as string, lista);
+    }
+  }
   return {
     tarefa,
     checklist: (checklist.data ?? []).map(
@@ -1845,6 +1863,7 @@ export async function getTarefaDetalhe(id: string): Promise<TarefaDetalhe | unde
         autorNome: (c.profiles as unknown as { nome: string } | null)?.nome ?? "Alguém",
         texto: c.texto as string,
         createdAt: c.created_at as string,
+        curtidas: curtidasPorComentario.get(c.id as string) ?? [],
       })
     ),
     anexos: (anexos.data ?? []).map(
@@ -2015,6 +2034,36 @@ export async function addTarefaComentario(tarefaId: string, autorId: string, tex
     .from("tarefa_comentarios")
     .insert({ tarefa_id: tarefaId, autor_id: autorId, texto });
   if (error) throw new Error(error.message);
+}
+
+// Liga/desliga o 👍 da pessoa no comentário. Devolve o comentário (para avisar o autor) e se ficou curtido.
+export async function alternarCurtidaComentario(
+  comentarioId: string,
+  userId: string
+): Promise<{ curtido: boolean; tarefaId: string; autorId: string | null; texto: string } | { error: string }> {
+  const supabase = await createClient();
+  const { data: comentario } = await supabase
+    .from("tarefa_comentarios")
+    .select("tarefa_id, autor_id, texto")
+    .eq("id", comentarioId)
+    .maybeSingle();
+  if (!comentario) return { error: "Comentário não encontrado." };
+  const { data: existente } = await supabase
+    .from("tarefa_comentario_reacoes")
+    .select("comentario_id")
+    .eq("comentario_id", comentarioId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const { error } = existente
+    ? await supabase.from("tarefa_comentario_reacoes").delete().eq("comentario_id", comentarioId).eq("user_id", userId)
+    : await supabase.from("tarefa_comentario_reacoes").insert({ comentario_id: comentarioId, user_id: userId });
+  if (error) return { error: error.message };
+  return {
+    curtido: !existente,
+    tarefaId: comentario.tarefa_id as string,
+    autorId: (comentario.autor_id as string | null) ?? null,
+    texto: comentario.texto as string,
+  };
 }
 
 export async function deleteTarefaComentario(id: string): Promise<void> {
