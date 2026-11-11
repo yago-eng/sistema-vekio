@@ -9,8 +9,40 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+const PAGINA_SEM_CONEXAO = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sem conexão</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;display:flex;min-height:100vh;margin:0;padding:24px;
+  align-items:center;justify-content:center;text-align:center;color:#333;background:#faf9f6}
+  button{margin-top:16px;padding:12px 20px;border:0;border-radius:10px;background:#3f4030;color:#fff;font-size:16px}
+</style></head>
+<body><div><h1 style="font-size:20px">Sem conexão no momento</h1>
+<p>Não foi possível falar com o sistema. Verifique o sinal da internet e tente de novo.</p>
+<button onclick="location.reload()">Tentar de novo</button></div></body></html>`;
+
+// Só intercepta pedidos de leitura (GET) deste mesmo site. O resto (envio de formulários, ações,
+// serviços externos) segue direto para a rede, sem passar por aqui.
 self.addEventListener("fetch", (event) => {
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  const pedido = event.request;
+  if (pedido.method !== "GET" || new URL(pedido.url).origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(pedido).catch(async () => {
+      // Sem rede (sinal fraco, por exemplo): nunca devolver "nada", que o Safari mostra como
+      // "FetchEvent.respondWith received an error: Returned response is null".
+      const guardada = await caches.match(pedido);
+      if (guardada) return guardada;
+      if (pedido.mode === "navigate") {
+        return new Response(PAGINA_SEM_CONEXAO, {
+          status: 503,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      return Response.error();
+    })
+  );
 });
 
 // Notificação push vinda do servidor ({ titulo, descricao, link }).
