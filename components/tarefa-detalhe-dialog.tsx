@@ -19,7 +19,7 @@ import { enviarArquivoDireto } from "@/lib/upload-client";
 import { comprimirImagemSeNecessario } from "@/lib/image-compress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ComentarioInput, TextoComMencoes } from "@/components/comentario-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -385,7 +385,9 @@ export function TarefaDetalheDialog({
                       </button>
                     )}
                   </div>
-                  <p className="whitespace-pre-wrap text-sm">{c.texto}</p>
+                  <p className="whitespace-pre-wrap text-sm">
+                    <TextoComMencoes texto={c.texto} membros={membros} />
+                  </p>
                 </div>
               ))}
               <form
@@ -398,9 +400,11 @@ export function TarefaDetalheDialog({
                   rodar(() => comentarTarefaAction(t.id, texto));
                 }}
               >
-                <Textarea
-                  value={novoComentario}
-                  onChange={(e) => setNovoComentario(e.target.value)}
+                <ComentarioInput
+                  valor={novoComentario}
+                  onChange={setNovoComentario}
+                  membros={membros}
+                  usuarioId={usuarioId}
                   placeholder="Escreva um comentário..."
                 />
                 <Button type="submit" size="sm" className="self-end" disabled={pending || !novoComentario.trim()}>

@@ -7,6 +7,7 @@ import { createClient } from "./supabase/server";
 import { registrarNotificacao } from "./notificacoes";
 import { interpretarPedidoDeTarefa, type RascunhoTarefa } from "./tarefa-ia";
 import { limitarResponsaveis, podeUsarTarefas } from "./recursos";
+import { encontrarMencoes } from "./mencoes";
 import {
   ARQUIVOS_BUCKET,
   addChecklistItem,
@@ -327,13 +328,37 @@ export async function comentarTarefaAction(tarefaId: string, texto: string): Pro
     await addTarefaComentario(tarefaId, user.id, t);
     const tarefa = await getTarefa(tarefaId);
     if (tarefa && !tarefa.pessoal) {
+      const trecho = t.length > 80 ? `${t.slice(0, 80)}…` : t;
+      const link = `/tarefas?tarefa=${tarefaId}`;
+
+      // Quem foi citado com @ recebe um aviso próprio. Só entram pessoas que podem ver esta tarefa
+      // (na lista Gestão, só administradores) e nunca quem está comentando.
+      const permitidos = limitarResponsaveis(await listMembrosEquipe(), { gestao: tarefa.gestao });
+      const mencionados = new Set(
+        encontrarMencoes(t, permitidos)
+          .map((m) => m.membro.id)
+          .filter((id) => id !== user.id)
+      );
+      for (const id of mencionados) {
+        await registrarNotificacao({
+          tipo: "tarefa",
+          titulo: "Você foi mencionado",
+          descricao: `${user.nome} mencionou você em "${tarefa.titulo}": ${trecho}`,
+          link,
+          atorId: user.id,
+          atorNome: user.nome,
+          destinatarioId: id,
+        });
+      }
+
+      // Responsáveis recebem o aviso de comentário, exceto quem já foi avisado pela menção.
       for (const responsavel of tarefa.responsaveis) {
-        if (responsavel.id === user.id) continue;
+        if (responsavel.id === user.id || mencionados.has(responsavel.id)) continue;
         await registrarNotificacao({
           tipo: "tarefa",
           titulo: "Comentário na sua tarefa",
-          descricao: `${user.nome} comentou em "${tarefa.titulo}": ${t.length > 80 ? `${t.slice(0, 80)}…` : t}`,
-          link: `/tarefas?tarefa=${tarefaId}`,
+          descricao: `${user.nome} comentou em "${tarefa.titulo}": ${trecho}`,
+          link,
           atorId: user.id,
           atorNome: user.nome,
           destinatarioId: responsavel.id,
