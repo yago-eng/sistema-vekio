@@ -1614,15 +1614,16 @@ export async function listLancamentosGlobais(): Promise<LancamentoComRegiao[]> {
   }));
 }
 
-export type CustoFixoComRegiao = { valor: number; dataVencimento: string; regiao: Regiao };
+export type CustoFixoComRegiao = { valor: number; dataVencimento: string; regiao: Regiao; status?: string };
 
 export async function listCustosFixosGlobais(): Promise<CustoFixoComRegiao[]> {
   const supabase = await createClient();
-  const rows = await fetchAllRows(supabase, "custos_fixos", "valor, data_vencimento, regiao");
+  const rows = await fetchAllRows(supabase, "custos_fixos", "valor, data_vencimento, regiao, status");
   return (rows ?? []).map((c) => ({
     valor: Number(c.valor),
     dataVencimento: c.data_vencimento as string,
     regiao: c.regiao as Regiao,
+    status: (c.status as string | undefined) ?? undefined,
   }));
 }
 
