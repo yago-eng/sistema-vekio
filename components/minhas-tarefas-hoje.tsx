@@ -60,6 +60,7 @@ export function MinhasTarefasHoje({ tarefas, hoje, total }: { tarefas: Tarefa[];
                   <Link href={`/tarefas?tarefa=${t.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="text-sm font-medium">{t.titulo}</span>
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {t.pessoal && <Badge variant="secondary">Pessoal</Badge>}
                       {t.status === "fazendo" && <Badge variant="secondary">Em andamento</Badge>}
                       {(t.prioridade === "urgente" || t.prioridade === "alta") && (
                         <Badge variant="secondary" className={COR_PRIORIDADE[t.prioridade]}>
