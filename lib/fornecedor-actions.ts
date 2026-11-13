@@ -7,21 +7,36 @@ import { FORNECEDORES_SUGERIDOS } from "./types";
 const normalizar = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
-// Lista para o campo "Fornecedor": a lista fixa + os cadastrados pela equipe, sem repetir e em ordem alfabética.
-export async function listarFornecedoresAction(): Promise<string[]> {
+// Lista para o campo "Fornecedor". O banco é a fonte (a lista fixa antiga só vale se a tabela ainda
+// não existir), para que os removidos pelos administradores não voltem.
+export async function listarFornecedoresAction(): Promise<{ nomes: string[]; podeRemover: boolean }> {
+  const user = await getCurrentUser();
+  const podeRemover = user?.role === "admin";
   const mapa = new Map<string, string>();
-  for (const n of FORNECEDORES_SUGERIDOS) mapa.set(normalizar(n), n);
   try {
     const supabase = await createClient();
-    const { data } = await supabase.from("fornecedores").select("nome");
+    const { data, error } = await supabase.from("fornecedores").select("nome");
+    if (error) throw error;
     for (const r of data ?? []) {
       const nome = String(r.nome ?? "").trim();
       if (nome) mapa.set(normalizar(nome), nome);
     }
   } catch {
-    // Tabela ainda não criada: segue só com a lista fixa.
+    for (const n of FORNECEDORES_SUGERIDOS) mapa.set(normalizar(n), n);
   }
-  return [...mapa.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return { nomes: [...mapa.values()].sort((a, b) => a.localeCompare(b, "pt-BR")), podeRemover };
+}
+
+export async function removerFornecedorAction(nome: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (user?.role !== "admin") return { ok: false, error: "Só administradores podem remover fornecedores." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("fornecedores").delete().eq("nome", nome).select("id");
+  if (error) return { ok: false, error: "Não consegui remover agora. Tente de novo." };
+  if (!data?.length) {
+    return { ok: false, error: "Não consegui remover (falta ativar a remoção no banco de dados)." };
+  }
+  return { ok: true };
 }
 
 export async function cadastrarFornecedorAction(
@@ -34,7 +49,7 @@ export async function cadastrarFornecedorAction(
   if (nome.length > 80) return { ok: false, error: "Nome muito longo (máximo 80 letras)." };
 
   const supabase = await createClient();
-  const existentes = await listarFornecedoresAction();
+  const { nomes: existentes } = await listarFornecedoresAction();
   const jaTem = existentes.find((n) => normalizar(n) === normalizar(nome));
   if (jaTem) return { ok: true, nome: jaTem };
 
