@@ -194,17 +194,19 @@ export function LancarGastoForm({
                 setAberto(true);
               }}
               onFocus={() => setAberto(true)}
+              onBlur={() => setTimeout(() => setAberto(false), 150)}
             />
-            {aberto && busca.trim().length > 0 && (
+            {aberto && (
               <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-md">
                 {filtradas.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-muted-foreground">Nenhuma obra encontrada.</p>
                 ) : (
-                  filtradas.slice(0, 30).map((o) => (
+                  filtradas.slice(0, 60).map((o) => (
                     <button
                       key={o.id}
                       type="button"
                       className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setObraId(o.id);
                         setObraNome(o.nome);
