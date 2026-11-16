@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { removerEventosDaTarefa, sincronizarTarefa } from "./google-agenda";
 import { getCurrentUser } from "./auth";
 import { createClient } from "./supabase/server";
 import { registrarNotificacao } from "./notificacoes";
@@ -49,6 +51,11 @@ async function exigirEquipe() {
   if (user.role === "cliente") redirect("/portal");
   if (!podeUsarTarefas(user)) redirect("/inicio");
   return user;
+}
+
+// Atualiza o Google Agenda dos responsáveis depois de responder à pessoa (não atrasa a tela).
+function agendar(tarefaId: string) {
+  after(() => sincronizarTarefa(tarefaId));
 }
 
 function atualizarTelas(obraId?: string | null) {
@@ -187,6 +194,7 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
       }
     }
 
+    agendar(id);
     atualizarTelas(campos.obraId);
     if (obraAnterior && obraAnterior !== campos.obraId) atualizarTelas(obraAnterior);
     return { id };
@@ -222,7 +230,9 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
         gestao: tarefa.gestao,
       });
       await copiarChecklist(id, proximaId);
+      agendar(proximaId);
     }
+    agendar(id);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não foi possível atualizar a tarefa." };
   }
@@ -241,6 +251,7 @@ export async function mudarPrazoTarefaAction(id: string, prazo: string | null): 
   }
   try {
     await updateTarefaPrazo(id, prazo);
+    agendar(id);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não foi possível mudar o prazo." };
   }
@@ -277,6 +288,7 @@ export async function mudarResponsaveisTarefaAction(id: string, responsavelIds: 
 
   try {
     await updateTarefaResponsaveis(id, novos);
+    agendar(id);
     for (const rid of novos) {
       if (rid === user.id || anteriores.includes(rid)) continue;
       await registrarNotificacao({
@@ -299,6 +311,7 @@ export async function mudarResponsaveisTarefaAction(id: string, responsavelIds: 
 export async function excluirTarefaAction(id: string): Promise<{ error?: string }> {
   await exigirEquipe();
   const tarefa = await getTarefa(id);
+  await removerEventosDaTarefa(id);
   const caminhos = await deleteTarefa(id);
   if (caminhos.length > 0) {
     const supabase = await createClient();

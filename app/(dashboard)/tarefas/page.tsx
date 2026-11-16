@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { limitarResponsaveis, podeUsarTarefas } from "@/lib/recursos";
 import { listMembrosEquipe, listObras, listObrasFavoritas, listTarefas } from "@/lib/store";
+import { googleConfigurado, temConexao } from "@/lib/google-agenda";
+import { GoogleAgendaBotao } from "@/components/google-agenda-botao";
 import { TarefasPainel } from "@/components/tarefas-painel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Briefcase, Lock } from "lucide-react";
@@ -15,13 +17,15 @@ export default async function TarefasPage({
   if (!podeUsarTarefas(user)) redirect("/inicio");
   const { tarefa, aba } = await searchParams;
   const ehAdmin = user.role === "admin";
-  const [tarefas, pessoais, gestao, membros, obras, favoritas] = await Promise.all([
+  const agendaConfigurada = googleConfigurado();
+  const [tarefas, pessoais, gestao, membros, obras, favoritas, agendaConectada] = await Promise.all([
     listTarefas(),
     listTarefas({ pessoal: true }),
     ehAdmin ? listTarefas({ gestao: true }) : Promise.resolve([]),
     listMembrosEquipe(),
     listObras(),
     listObrasFavoritas(user.id),
+    agendaConfigurada ? temConexao(user.id) : Promise.resolve(false),
   ]);
 
   // O link de um aviso (?tarefa=) abre a aba onde a tarefa está.
@@ -36,11 +40,14 @@ export default async function TarefasPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Tarefas</h1>
-        <p className="text-sm text-muted-foreground">
-          Tarefas da empresa e das obras, com responsável, prazo, checklist e comentários.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Tarefas</h1>
+          <p className="text-sm text-muted-foreground">
+            Tarefas da empresa e das obras, com responsável, prazo, checklist e comentários.
+          </p>
+        </div>
+        {agendaConfigurada && <GoogleAgendaBotao conectado={agendaConectada} />}
       </div>
       <Tabs key={abaInicial} defaultValue={abaInicial} className="flex flex-col gap-4">
         <TabsList>
