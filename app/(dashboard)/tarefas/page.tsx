@@ -11,11 +11,11 @@ import { Briefcase, Lock } from "lucide-react";
 export default async function TarefasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tarefa?: string; aba?: string }>;
+  searchParams: Promise<{ tarefa?: string; aba?: string; nova?: string }>;
 }) {
   const user = await requireUser();
   if (!podeUsarTarefas(user)) redirect("/inicio");
-  const { tarefa, aba } = await searchParams;
+  const { tarefa, aba, nova } = await searchParams;
   const ehAdmin = user.role === "admin";
   const agendaConfigurada = googleConfigurado();
   const [tarefas, pessoais, gestao, membros, obras, favoritas, agendaConectada] = await Promise.all([
@@ -74,6 +74,7 @@ export default async function TarefasPage({
             favoritas={favoritas.map((f) => ({ id: f.id, nome: f.nome }))}
             atalhoGestao={ehAdmin ? { abertas: gestao.filter((t) => t.status !== "concluida").length } : undefined}
             abrirId={abaInicial === "equipe" ? tarefa : undefined}
+            abrirNova={nova === "1" && abaInicial === "equipe"}
           />
         </TabsContent>
 

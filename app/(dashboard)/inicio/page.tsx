@@ -13,7 +13,7 @@ import {
   Receipt,
   CalendarClock,
   CalendarHeart,
-  CheckSquare,
+  ListPlus,
   Users,
   ArrowRight,
   MapPin,
@@ -56,7 +56,7 @@ function proximaOcorrencia(iso: string, recorrente: boolean) {
 
 const acoesPrincipais = [
   { href: "/lancar-gasto", label: "Lançar gasto", desc: "Registrar um gasto de obra", icon: Receipt },
-  { href: "/tarefas", label: "Tarefas", desc: "Tarefas da empresa, das obras e pessoais", icon: CheckSquare, recurso: "tarefas" },
+  { href: "/tarefas?nova=1", label: "Nova tarefa", desc: "Criar uma tarefa agora", icon: ListPlus, recurso: "tarefas" },
   { href: "/obras", label: "Obras & Financeiro", desc: "Ver e gerenciar obras", icon: Building2 },
   { href: "/lembretes", label: "Lembretes e Notas", desc: "Suas anotações privadas", icon: StickyNote },
 ];

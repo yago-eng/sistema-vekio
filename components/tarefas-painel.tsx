@@ -78,6 +78,7 @@ export function TarefasPainel({
   favoritas = [],
   atalhoGestao,
   abrirId,
+  abrirNova = false,
 }: {
   tarefas: Tarefa[];
   membros: MembroEquipe[];
@@ -90,13 +91,14 @@ export function TarefasPainel({
   favoritas?: ObraOpcao[];
   atalhoGestao?: { abertas: number }; // atalho para a lista Gestão (só administradores)
   abrirId?: string;
+  abrirNova?: boolean; // abre direto o formulário de nova tarefa (atalho da tela inicial: ?nova=1)
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [responsavel, setResponsavel] = useState<string>(obraFixaId || pessoal || gestao ? TODAS : MINHAS);
   const [obra, setObra] = useState<string>(TODAS);
   const [busca, setBusca] = useState("");
-  const [criando, setCriando] = useState(false);
+  const [criando, setCriandoEstado] = useState(abrirNova);
   const [abertaId, setAbertaId] = useState<string | null>(abrirId ?? null);
   // Clicar num aviso de tarefa estando já na tela de Tarefas só muda o endereço (?tarefa=):
   // acompanha essa mudança para abrir a tarefa, e limpa o endereço ao fechar.
@@ -105,6 +107,11 @@ export function TarefasPainel({
   useEffect(() => {
     if (tarefaDoEndereco && tarefaDoEndereco === abrirId) setAbertaId(tarefaDoEndereco);
   }, [tarefaDoEndereco, abrirId]);
+  const novaDoEndereco = useSearchParams().get("nova");
+  function setCriando(aberto: boolean) {
+    setCriandoEstado(aberto);
+    if (!aberto && novaDoEndereco) window.history.replaceState(null, "", pathname);
+  }
   function fecharDetalhe() {
     setAbertaId(null);
     if (tarefaDoEndereco) window.history.replaceState(null, "", pathname);
