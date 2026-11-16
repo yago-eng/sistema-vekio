@@ -13,6 +13,7 @@ import {
   Receipt,
   CalendarClock,
   CalendarHeart,
+  CheckSquare,
   Users,
   ArrowRight,
   MapPin,
@@ -55,6 +56,7 @@ function proximaOcorrencia(iso: string, recorrente: boolean) {
 
 const acoesPrincipais = [
   { href: "/lancar-gasto", label: "Lançar gasto", desc: "Registrar um gasto de obra", icon: Receipt },
+  { href: "/tarefas", label: "Tarefas", desc: "Tarefas da empresa, das obras e pessoais", icon: CheckSquare, recurso: "tarefas" },
   { href: "/obras", label: "Obras & Financeiro", desc: "Ver e gerenciar obras", icon: Building2 },
   { href: "/lembretes", label: "Lembretes e Notas", desc: "Suas anotações privadas", icon: StickyNote },
 ];
@@ -114,7 +116,9 @@ export default async function InicioPage() {
       <div>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Acesso rápido</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {acoesPrincipais.map((a) => (
+          {acoesPrincipais
+            .filter((a) => a.recurso !== "tarefas" || (user && podeUsarTarefas(user)))
+            .map((a) => (
             <Link key={a.href} href={a.href} className="group">
               <Card className="h-full transition-colors group-hover:border-primary/40 group-hover:bg-primary/5">
                 <CardContent className="flex items-start gap-3 pt-6">
