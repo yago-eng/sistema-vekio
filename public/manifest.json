@@ -2,7 +2,7 @@
   "name": "Vekio Engenharia — Sistema de Gestão",
   "short_name": "Vekio",
   "description": "Lance gastos de obra, confira o financeiro e acompanhe o cronograma direto do celular.",
-  "start_url": "/lancar-gasto",
+  "start_url": "/",
   "id": "/lancar-gasto",
   "display": "standalone",
   "background_color": "#f5f4f0",
