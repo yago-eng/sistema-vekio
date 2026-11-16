@@ -5,6 +5,7 @@ import { salvarTarefaAction } from "@/lib/tarefa-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ObraBusca } from "@/components/obra-busca";
 import { ComentarioInput } from "@/components/comentario-input";
 import {
   Select,
@@ -118,23 +119,14 @@ export function TarefaForm({
         {!obraFixaId && !pessoal && !gestao && (
           <div className="flex flex-col gap-2">
             <Label>Obra</Label>
-            <Select
+            <ObraBusca
+              id="tarefa-obra"
+              obras={obras}
               value={obraId}
-              onValueChange={(v) => setObraId(String(v))}
-              items={{ [SEM]: "Geral (sem obra)", ...Object.fromEntries(obras.map((o) => [o.id, o.nome])) }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SEM}>Geral (sem obra)</SelectItem>
-                {obras.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {o.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={setObraId}
+              semValor={SEM}
+              semLabel="Geral (sem obra)"
+            />
           </div>
         )}
 
