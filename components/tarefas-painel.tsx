@@ -30,6 +30,7 @@ import {
   CalendarDays,
   Check,
   CheckSquare,
+  Clock,
   ChevronDown,
   ChevronRight,
   Columns3,
@@ -332,6 +333,12 @@ export function TarefasPainel({
           <span className="flex items-center gap-1">
             <Paperclip className="size-3" />
             {t.anexos}
+          </span>
+        )}
+        {t.duracaoDias != null && (
+          <span className="flex items-center gap-1" title="Tempo de duração">
+            <Clock className="size-3" />
+            {t.duracaoDias} {t.duracaoDias === 1 ? "dia" : "dias"}
           </span>
         )}
         {t.recorrencia !== "nenhuma" && <Repeat className="size-3" aria-label="Repete" />}

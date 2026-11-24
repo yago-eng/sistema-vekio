@@ -288,6 +288,14 @@ export function TarefaDetalheDialog({
                   {atrasada && " · atrasada"}
                 </dd>
               </div>
+              {t.duracaoDias != null && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Tempo de duração</dt>
+                  <dd>
+                    {t.duracaoDias} {t.duracaoDias === 1 ? "dia" : "dias"}
+                  </dd>
+                </div>
+              )}
               {!t.pessoal && !t.gestao && (
                 <div>
                   <dt className="text-xs text-muted-foreground">Obra</dt>

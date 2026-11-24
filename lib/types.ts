@@ -357,6 +357,7 @@ export type Tarefa = {
   responsaveis: MembroEquipe[];
   prazo: string | null; // YYYY-MM-DD
   recorrencia: TarefaRecorrencia;
+  duracaoDias: number | null; // dias necessários para executar (opcional)
   criadoPor: string | null;
   pessoal: boolean;
   gestao: boolean;

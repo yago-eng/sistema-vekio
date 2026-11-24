@@ -106,6 +106,7 @@ export type SalvarTarefaInput = {
   responsavelIds: string[];
   prazo: string | null;
   recorrencia: string;
+  duracaoDias?: number | null; // opcional: dias necessários para executar
   pessoal?: boolean; // só na criação; tarefa pessoal só o dono enxerga
   gestao?: boolean; // só na criação; lista Gestão, só administradores
   checklist?: string[]; // só na criação (ex.: vindo da IA)
@@ -121,6 +122,12 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
   const prazo = input.prazo && /^\d{4}-\d{2}-\d{2}$/.test(input.prazo) ? input.prazo : null;
   if (input.recorrencia !== "nenhuma" && !prazo) {
     return { error: "Para repetir a tarefa, defina um prazo." };
+  }
+
+  const duracaoDias =
+    input.duracaoDias == null || Number.isNaN(Number(input.duracaoDias)) ? null : Math.round(Number(input.duracaoDias));
+  if (duracaoDias !== null && (duracaoDias < 1 || duracaoDias > 365)) {
+    return { error: "O tempo de duração deve ser de 1 a 365 dias (ou deixe em branco)." };
   }
 
   const atual = input.id ? await getTarefa(input.id) : undefined;
@@ -140,6 +147,7 @@ export async function salvarTarefaAction(input: SalvarTarefaInput): Promise<{ er
       : Array.from(new Set(input.responsavelIds)).filter((id) => permitidos.some((m) => m.id === id)),
     prazo,
     recorrencia: input.recorrencia as TarefaRecorrencia,
+    duracaoDias,
   };
 
   try {
@@ -225,6 +233,7 @@ export async function mudarStatusTarefaAction(id: string, status: string): Promi
         responsavelIds: tarefa.responsaveis.map((r) => r.id),
         prazo: proximoPrazo(tarefa.prazo, tarefa.recorrencia),
         recorrencia: tarefa.recorrencia,
+        duracaoDias: tarefa.duracaoDias,
         criadoPor: user.id,
         pessoal: tarefa.pessoal,
         gestao: tarefa.gestao,

@@ -62,6 +62,7 @@ export function TarefaForm({
   const [prazo, setPrazo] = useState(tarefa?.prazo ?? rascunho?.prazo ?? "");
   const [prioridade, setPrioridade] = useState<string>(tarefa?.prioridade ?? rascunho?.prioridade ?? "normal");
   const [recorrencia, setRecorrencia] = useState<string>(tarefa?.recorrencia ?? rascunho?.recorrencia ?? "nenhuma");
+  const [duracao, setDuracao] = useState(tarefa?.duracaoDias != null ? String(tarefa.duracaoDias) : "");
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -78,6 +79,7 @@ export function TarefaForm({
         responsavelIds,
         prazo: prazo || null,
         recorrencia,
+        duracaoDias: duracao.trim() ? Number(duracao) : null,
         pessoal,
         gestao,
         checklist: tarefa ? undefined : rascunho?.checklist,
@@ -164,6 +166,26 @@ export function TarefaForm({
         <div className="flex flex-col gap-2">
           <Label htmlFor="tarefa-prazo">Prazo</Label>
           <Input id="tarefa-prazo" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="tarefa-duracao">
+            Tempo de duração <span className="font-normal text-muted-foreground">(opcional)</span>
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="tarefa-duracao"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={365}
+              step={1}
+              placeholder="Ex: 3"
+              value={duracao}
+              onChange={(e) => setDuracao(e.target.value)}
+            />
+            <span className="shrink-0 text-sm text-muted-foreground">dias</span>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

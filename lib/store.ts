@@ -1783,6 +1783,7 @@ function mapTarefa(row: Record<string, unknown>, nomes: Map<string, string>): Ta
       .map((id) => ({ id, nome: nomes.get(id)! })),
     prazo: (row.prazo as string | null) ?? null,
     recorrencia: row.recorrencia as TarefaRecorrencia,
+    duracaoDias: row.duracao_dias != null ? Number(row.duracao_dias) : null,
     criadoPor: (row.criado_por as string | null) ?? null,
     pessoal: Boolean(row.pessoal),
     gestao: Boolean(row.gestao),
@@ -1902,6 +1903,7 @@ export type TarefaCampos = {
   responsavelIds: string[];
   prazo: string | null;
   recorrencia: TarefaRecorrencia;
+  duracaoDias?: number | null;
 };
 
 export async function createTarefa(
@@ -1919,6 +1921,7 @@ export async function createTarefa(
       responsavel_id: input.responsavelIds[0] ?? null,
       prazo: input.prazo,
       recorrencia: input.recorrencia,
+      duracao_dias: input.duracaoDias ?? null,
       criado_por: input.criadoPor,
       pessoal: input.pessoal ?? false,
       gestao: input.gestao ?? false,
@@ -1942,6 +1945,7 @@ export async function updateTarefa(id: string, campos: TarefaCampos): Promise<vo
       responsavel_id: campos.responsavelIds[0] ?? null,
       prazo: campos.prazo,
       recorrencia: campos.recorrencia,
+      duracao_dias: campos.duracaoDias ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
